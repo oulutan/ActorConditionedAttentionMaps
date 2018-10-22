@@ -1,0 +1,1 @@
+export ACAM_DIR=$PWD
