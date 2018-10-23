@@ -29,7 +29,10 @@ from ava import standard_fields
 
 import os
 import json
-RESULTS_FOLDER = os.environ['AVA_DIR'] + '/AVA/result_mAPs'
+
+ACAM_FOLDER = os.environ['ACAM_DIR']
+AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
+RESULTS_FOLDER = AVA_FOLDER + '/AVA/result_mAPs'
 
 def print_time(message, start):
   logging.info("==> %g seconds to %s", time.time() - start, message)
@@ -188,7 +191,7 @@ def run_evaluation(labelmap, groundtruth, detections, exclusions):
   return metrics
 
 def combine_res_with_size(result_list):
-  data_dir = os.environ["AVA_DIR"] + '/AVA/data/'
+  data_dir = AVA_FOLDER + '/data/'
   with open(data_dir + 'action_lists_train.json') as fp:
     tr_lists = json.load(fp)
   with open(data_dir + 'action_lists_val.json') as fp:

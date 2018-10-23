@@ -64,6 +64,8 @@ TRAIN_FULL_MODEL = True
 
 ONLY_INIT_I3D = False
 
+GENERATE_ATTN_MAPS = False
+
 DELAY = 0
 
 def set_logger(model_id, evaluate, npy_seed):
@@ -219,6 +221,13 @@ class Model_Trainer():
         else:
             val_detection_segments = self.dataset_fcn.get_test_list()
         
+        ## DEBUGGING
+        # val_detection_segments = ['1j20qq1JyX4.1108']
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Ov0za6Xb1LM')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.11')]
+        ## DEBUGGING
+
         #               [sample, labels_np, rois_np, no_det, segment_key] 
         output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
 
@@ -819,6 +828,8 @@ class Model_Trainer():
                     'roi_labels': self.input_labels,
                     'segment_keys': self.segment_keys,
                     'no_dets': self.no_dets,
+                    'input_batch': self.input_batch,
+                    'rois': self.rois
                     # 'correct_preds': self.correct_preds,
                     }
         feed_dict = {}
@@ -826,6 +837,9 @@ class Model_Trainer():
         ### aug debug
         # run_dict['shifted_rois'] = self.shifted_keyframe_rois
         # run_dict['regular_rois'] = self.regular_keyframe_rois
+        if self.architecture_str == 'soft_attn':
+            run_dict['attention_map'] = tf.get_collection('attention_map')[0]
+            run_dict['feature_activations'] = tf.get_collection('feature_activations')[0]
 
         if training_flag: 
             run_dict['optimization_op'] = self.optimization_op
@@ -896,6 +910,11 @@ class Model_Trainer():
 
             # Run training
             out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options)
+            if GENERATE_ATTN_MAPS:
+                for nnn in range(out_dict['no_dets'][0]):
+                    img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'],
+                                                                out_dict['rois'], nnn, 5)
+            # import pdb;pdb.set_trace()
 
             #### aug debug
             # shifted_rois = out_dict['shifted_rois']

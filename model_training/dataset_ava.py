@@ -74,10 +74,10 @@ with open(annotations_path) as fp:
     ANNOS_VAL = json.load(fp)
  
 
-# _split = 'test'
-# annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % _split
-# with open(annotations_path) as fp:
-#     ANNOS_TEST = json.load(fp)
+_split = 'test'
+annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % _split
+with open(annotations_path) as fp:
+    ANNOS_TEST = json.load(fp)
  
 # Python Functions
 def get_data(segment_key, split):
