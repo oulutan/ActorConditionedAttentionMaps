@@ -1,0 +1,3 @@
+[submodule "evaluation/ActivityNet"]
+	path = evaluation/ActivityNet
+	url = https://github.com/activitynet/ActivityNet

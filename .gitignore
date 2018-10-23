@@ -1,0 +1,4 @@
+*.pyc
+./data/AVA/*
+./data/JHMDB/*
+
