@@ -16,7 +16,6 @@ import input_augmentation
 import model_layers
 
 import i3d
-import layers
 
 from tensorflow.contrib.framework.python.ops import variables
 from tensorflow.python.ops import control_flow_ops
@@ -42,8 +41,8 @@ HOSTNAME = socket.gethostname()
 # if HOSTNAME == 'skywalker':
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
-PREPROCESS_CORES = 20
-BUFFER_SIZE = 30
+PREPROCESS_CORES = 10
+BUFFER_SIZE = 20
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -68,7 +67,7 @@ GENERATE_ATTN_MAPS = False
 
 DELAY = 0
 
-def set_logger(model_id, evaluate, npy_seed):
+def set_logger(model_id, evaluate, npy_seed, dataset_str):
     # npy seed is the same as the checkpoint number, so use it in logger name
     
     run_name = DATE
@@ -77,7 +76,7 @@ def set_logger(model_id, evaluate, npy_seed):
     if evaluate: run_name = run_name + '_' + 'evaluate'
     run_name = run_name + '_%.2i' % npy_seed
 
-    log_file = ( AVA_FOLDER + '/logs/' + run_name + '.txt')
+    log_file = ( ACAM_FOLDER +'/data/' + dataset_str.upper() + '/logs/' + run_name + '.txt')
     logging.getLogger('tensorflow').setLevel(logging.WARNING)
 
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s--%(funcName)s--%(message)s',
@@ -136,7 +135,7 @@ def main():
     # gpu = os.environ["CUDA_VISIBLE_DEVICES"]
 
 
-    set_logger(model_id, evaluate, npy_seed)
+    set_logger(model_id, evaluate, npy_seed, dataset_str)
     logging.info(   'Running ' + DATE +
                     ', on gpu ' + gpu +
                     ', for %i epochs' % NUM_EPOCHS +
@@ -172,7 +171,7 @@ class Model_Trainer():
         self.evaluate = only_evaluate
         self.run_test = run_test
         self.model_id = model_id
-        self.saver_path = self.dataset_fcn.MODEL_SAVER_PATH + '_%s_%s' % (model_id, dataset)
+        self.saver_path = self.dataset_fcn.MODEL_SAVER_PATH + '_%s_%s' % (model_id, dataset_str)
         self.batch_size = batch_size
         self.architecture_str = architecture_str
         
@@ -187,6 +186,7 @@ class Model_Trainer():
 
     def set_data_inputs(self):
         train_detection_segments = self.dataset_fcn.get_train_list()
+        split = 'train'
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
         output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
@@ -202,7 +202,7 @@ class Model_Trainer():
         # repeat infinitely and shuffle with seed
         # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
         dataset = dataset.map(lambda seg_key, c_split: 
-                tuple(tf.py_func(dataset_tf.get_data, [seg_key,c_split], output_types)),
+                tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
                 num_parallel_calls=PREPROCESS_CORES)
         # dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensors(x).repeat(2))
         # dataset = dataset.shuffle(BATCH_SIZE * self.no_gpus * 4)
@@ -217,9 +217,11 @@ class Model_Trainer():
         
         if not self.run_test:
             val_detection_segments = self.dataset_fcn.get_val_list()
+            split = 'val'
                 
         else:
             val_detection_segments = self.dataset_fcn.get_test_list()
+            split = 'test'
         
         ## DEBUGGING
         # val_detection_segments = ['1j20qq1JyX4.1108']
@@ -238,7 +240,7 @@ class Model_Trainer():
 
         dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
         dataset = dataset.map(lambda seg_key, c_split: 
-                tuple(tf.py_func(dataset_tf.get_data, [seg_key,c_split], output_types)),
+                tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
                 num_parallel_calls=PREPROCESS_CORES)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
@@ -259,9 +261,9 @@ class Model_Trainer():
 
         input_batch = tf.cast(input_batch, tf.float32)
 
-        input_batch.set_shape([None, dataset_tf.INPUT_T, dataset_tf.INPUT_H, dataset_tf.INPUT_W, 3])
-        labels.set_shape([None, dataset_tf.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
-        rois.set_shape([None, dataset_tf.MAX_ROIS, 4])
+        input_batch.set_shape([None, self.dataset_fcn.INPUT_T, self.dataset_fcn.INPUT_H, self.dataset_fcn.INPUT_W, 3])
+        labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
+        rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
         no_dets.set_shape([None])
         segment_keys.set_shape([None])
 
@@ -351,7 +353,7 @@ class Model_Trainer():
             # cur_no_dets = no_dets[start_index:end_index]
 
             # setup mappings and rois for each gpu batch , nz:nonzero
-            rois_nz, labels_nz, batch_indices_nz = dataset_tf.combine_batch_rois(cur_rois, cur_labels)
+            rois_nz, labels_nz, batch_indices_nz = model_layers.combine_batch_rois(cur_rois, cur_labels)
 
             with tf.device('/gpu:%d' % gg):
               with tf.name_scope('%s_%d' % ('GPU', gg)):
@@ -443,7 +445,7 @@ class Model_Trainer():
 
         
         augmented_sequence, augmented_rois = input_augmentation.augment_input_sequences(cur_input_seq, cur_rois)
-        cur_input_seq = tf.cond(self.is_training, lambda:cropped_sequence, lambda: cur_input_seq)
+        cur_input_seq = tf.cond(self.is_training, lambda:augmented_sequence, lambda: cur_input_seq)
         cur_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
 
         #### INITIAL FEATURES
@@ -878,7 +880,7 @@ class Model_Trainer():
         # num_iters = TRAINING_ITERS if training_flag else val_iters
         num_iters = train_iters if training_flag else val_iters
 
-        if BALANCED_VALIDATION and not training_flag:
+        if not training_flag:
             num_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus)
             logging.info('Evaluating on balanced val subset')
         if self.evaluate:

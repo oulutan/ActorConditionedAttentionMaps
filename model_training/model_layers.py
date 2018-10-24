@@ -1,4 +1,5 @@
 import tensorflow as tf
+import i3d as i3d_model
 
 BOX_CROP_SIZE = [10,10]
 
@@ -544,15 +545,17 @@ def combine_batch_rois(rois, labels, ):#no_dets):
     no_dets is [BATCH] indicating the number of nonzero terms in each batch dim
     '''
     B = tf.shape(rois)[0]
+    num_classes = labels.shape[2]
+    max_rois = labels.shape[1]
      
     rois_all = tf.reshape(rois, [-1, 4])
-    labels_all = tf.reshape(labels, [-1,NUM_CLASSES])
+    labels_all = tf.reshape(labels, [-1,num_classes])
  
     # We need a way to map each rois to its sample
     # samples have their batch indices
     # since we have constant no of max_rois I can just generate the indices
     batch_range = tf.expand_dims(tf.range(B),axis=1) # size Bx1
-    batch_idx_tiled = tf.tile(batch_range, [1, MAX_ROIS]) # size BxMAX_ROIS
+    batch_idx_tiled = tf.tile(batch_range, [1, max_rois]) # size BxMAX_ROIS
     batch_indices_all = tf.reshape(batch_idx_tiled, [-1])
  
     # TODO

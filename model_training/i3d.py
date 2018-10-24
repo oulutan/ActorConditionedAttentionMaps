@@ -54,14 +54,18 @@ def preprocess(input_seq):
   # output_seq = output_seq / 255.0
   return output_seq
 
-def initialize_weights(sess, weights_path):
-  variable_map = {}
-  for variable in tf.global_variables():
-    if variable.name.split('/')[0] == 'I3D_Model' and 'Logits' not in variable.name and 'Adam' not in variable.name:
-      variable_map[variable.name.replace(':0', '')] = variable
-  rgb_saver = tf.train.Saver(var_list=variable_map, reshape=True)
+def initialize_weights(sess, path_to_weights):
+  i3d_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='I3D_Model')
+  var_map = {}
+  for variable in i3d_var:
+      if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
+          map_name = variable.name.replace(':0', '')
+          map_name = map_name.replace('I3D_Model', 'RGB')
+          var_map[map_name] = variable
+      
+  rgb_saver = tf.train.Saver(var_list=var_map, reshape=True)
 
-  path_to_weights = weights_path + 'i3d_rgb_imagenet/model.ckpt'
+  #path_to_weights = weights_path + 'i3d_rgb_imagenet/model.ckpt'
   rgb_saver.restore(sess, path_to_weights)
   print('loaded i3d weights %s' % path_to_weights)
 
@@ -75,12 +79,12 @@ def initialize_tail(sess, weights_path):
 
   var_map = {}
   for variable in tail_vars:
-      if variable.name.endswith('w:0'):
+      if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
           map_name = variable.name.replace(':0', '')
           map_name = map_name.replace('Tail_I3D', 'RGB/inception_i3d')
           var_map[map_name] = variable
   if var_map.keys():
-      tail_saver = tf.train.Saver(var_list=var_map)
+      tail_saver = tf.train.Saver(var_list=var_map, reshape=True)
       tail_saver.restore(sess, weights_path)
       print('Restored i3d tail weights')
   else:

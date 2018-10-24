@@ -78,7 +78,22 @@ _split = 'test'
 annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % _split
 with open(annotations_path) as fp:
     ANNOS_TEST = json.load(fp)
+
+def get_train_list():
+    with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
+        train_detection_segments = json.load(fp)
+    return train_detection_segments
  
+def get_val_list():
+    with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
+        val_detection_segments = json.load(fp)
+    return val_detection_segments
+
+def get_test_list():
+    with open(DATA_FOLDER + 'segment_keys_test_detections_only.json') as fp:
+        test_detection_segments = json.load(fp)
+    return test_detection_segments
+
 # Python Functions
 def get_data(segment_key, split):
  
