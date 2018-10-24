@@ -55,10 +55,11 @@ def preprocess(input_seq):
   return output_seq
 
 def initialize_weights(sess, path_to_weights):
-  i3d_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='I3D_Model')
+  i3d_var = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='I3D_Model')
   var_map = {}
   for variable in i3d_var:
-      if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
+      # if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
+      if 'Adam' not in variable.name:
           map_name = variable.name.replace(':0', '')
           map_name = map_name.replace('I3D_Model', 'RGB')
           var_map[map_name] = variable
@@ -75,11 +76,12 @@ def initialize_tail(sess, weights_path):
   ## need var_map keys as this
   # RGB/inception_i3d/Mixed_3c/Branch_2/Conv3d_0b_3x3/conv_3d/w
 
-  tail_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Tail_I3D')
+  tail_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Tail_I3D')
 
   var_map = {}
   for variable in tail_vars:
-      if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
+     # if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
+     if 'Adam' not in variable.name:
           map_name = variable.name.replace(':0', '')
           map_name = map_name.replace('Tail_I3D', 'RGB/inception_i3d')
           var_map[map_name] = variable
@@ -91,9 +93,9 @@ def initialize_tail(sess, weights_path):
       print('Tail did not initialize anything')
   
 def initialize_all_i3d_from_ckpt(sess, ckpt_file):
-  head_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='RGB/inception_i3d')
-  tail_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Tail_I3D')
-  cls_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='CLS_Logits')
+  head_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='RGB/inception_i3d')
+  tail_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Tail_I3D')
+  cls_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='CLS_Logits')
 
   var_list = head_vars + tail_vars + cls_vars
   i3d_loader = tf.train.Saver(var_list=var_list)
