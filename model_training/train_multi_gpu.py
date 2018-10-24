@@ -401,8 +401,8 @@ class Model_Trainer():
         else:
             logging.info('Optimizing ALL weights: \n'+'\n'.join(var.name + ': ' + str(var.shape) for grad,var in self.average_grads))
 
-        with tf.device('/gpu:0'):
-            self.optimization_op = self.optimizer.apply_gradients(self.average_grads)
+        #with tf.device('/cpu:0'):
+        self.optimization_op = self.optimizer.apply_gradients(self.average_grads)
 
         logging.info('Not Updating batchnorm')
         # bn_layers_to_update = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -742,6 +742,9 @@ class Model_Trainer():
             if ONLY_INIT_I3D == False:
                 model_saver.restore(sess, ckpt_file)
                 logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
             if not self.evaluate:
@@ -1134,7 +1137,19 @@ def save_serialized_list(input_list, file_path):
 def get_3_decimal_float(infloat):
     return float('%.3f' % infloat)
 
+def custom_loader(sess, ckpt_file):
+    global_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+    var_map = {}
+    for variable in global_vars:
+        if "Adam" not in variable.name:
+            map_name = variable.name.replace(':0', '')
+            if "I3D_Model" in variable.name:
+                map_name = map_name.replace('I3D_Model', 'RGB')
+            var_map[map_name] = variable
 
+    custom_saver = tf.train.Saver(var_list=var_map, reshape=True)
+    custom_saver.restore(sess, ckpt_file)
+    print('USED CUSTOM SAVER FOR LOADING CKPT!')
 
 
 if __name__ == '__main__':
