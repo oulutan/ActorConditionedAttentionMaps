@@ -66,6 +66,8 @@ ONLY_INIT_I3D = False
 
 GENERATE_ATTN_MAPS = False
 
+TRACE_PERFORMANCE = True
+
 DELAY = 0
 
 def set_logger(model_id, evaluate, npy_seed, dataset_str):
