@@ -234,7 +234,8 @@ class Model_Trainer():
         ## DEBUGGING
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
-        output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
 
         # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
         if not self.evaluate:
@@ -262,7 +263,7 @@ class Model_Trainer():
         # Define shapes of the inputs coming from python functions
         input_batch, labels, rois, no_dets, segment_keys = next_element
 
-        input_batch = tf.cast(input_batch, tf.float32)
+        # input_batch = tf.cast(input_batch, tf.float32)
 
         input_batch.set_shape([None, self.dataset_fcn.INPUT_T, self.dataset_fcn.INPUT_H, self.dataset_fcn.INPUT_W, 3])
         labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
@@ -936,8 +937,9 @@ class Model_Trainer():
                     for event in chrome_trace_dict['traceEvents']:
                         if 'ts' in event:
                             self.timeline_dict['traceEvents'].append(event)
-                with open('timeline.json', 'w') as fp:
-                    json.dump(self.timeline_dict, fp)
+                if ii % 20 == 0:
+                    with open('timeline.json', 'w') as fp:
+                        json.dump(self.timeline_dict, fp)
 
             # import pdb;pdb.set_trace()
 
