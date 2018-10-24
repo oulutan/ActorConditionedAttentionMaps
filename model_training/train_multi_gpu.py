@@ -42,8 +42,8 @@ HOSTNAME = socket.gethostname()
 # if HOSTNAME == 'skywalker':
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
-PREPROCESS_CORES = 10
-BUFFER_SIZE = 20
+PREPROCESS_CORES = 5 # times number of gpus
+BUFFER_SIZE = 10
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -66,7 +66,7 @@ ONLY_INIT_I3D = False
 
 GENERATE_ATTN_MAPS = False
 
-TRACE_PERFORMANCE = True
+TRACE_PERFORMANCE = False
 
 DELAY = 0
 
@@ -207,7 +207,7 @@ class Model_Trainer():
         # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
         dataset = dataset.map(lambda seg_key, c_split: 
                 tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                num_parallel_calls=PREPROCESS_CORES)
+                num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensors(x).repeat(2))
         # dataset = dataset.shuffle(BATCH_SIZE * self.no_gpus * 4)
         # import pdb;pdb.set_trace()
@@ -246,7 +246,7 @@ class Model_Trainer():
         dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
         dataset = dataset.map(lambda seg_key, c_split: 
                 tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                num_parallel_calls=PREPROCESS_CORES)
+                num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
@@ -401,7 +401,8 @@ class Model_Trainer():
         else:
             logging.info('Optimizing ALL weights: \n'+'\n'.join(var.name + ': ' + str(var.shape) for grad,var in self.average_grads))
 
-        self.optimization_op = self.optimizer.apply_gradients(self.average_grads)
+        with tf.device('/gpu:0'):
+            self.optimization_op = self.optimizer.apply_gradients(self.average_grads)
 
         logging.info('Not Updating batchnorm')
         # bn_layers_to_update = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
