@@ -68,7 +68,7 @@ def initialize_weights(sess, path_to_weights):
 
   #path_to_weights = weights_path + 'i3d_rgb_imagenet/model.ckpt'
   rgb_saver.restore(sess, path_to_weights)
-  print('loaded i3d weights %s' % path_to_weights)
+  print('Restored i3d head weights from %s ' % path_to_weights)
 
 def initialize_tail(sess, weights_path):
   # weights_path = MAIN_FOLDER + '/model_training/models/weights/'
@@ -88,7 +88,7 @@ def initialize_tail(sess, weights_path):
   if var_map.keys():
       tail_saver = tf.train.Saver(var_list=var_map, reshape=True)
       tail_saver.restore(sess, weights_path)
-      print('Restored i3d tail weights')
+      print('Restored i3d tail weights from %s ' % weights_path)
   else:
       print('Tail did not initialize anything')
   
