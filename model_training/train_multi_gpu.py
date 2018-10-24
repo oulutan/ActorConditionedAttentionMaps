@@ -917,8 +917,12 @@ class Model_Trainer():
             #import pdb;pdb.set_trace()
             
             # for oom cases
-            run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True, trace_level=tf.RunOptions.FULL_TRACE)
-            run_metadata = tf.RunMetadata()
+            if TRACE_PERFORMANCE:
+                run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True, trace_level=tf.RunOptions.FULL_TRACE)
+                run_metadata = tf.RunMetadata()
+            else:
+                run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
+                run_metadata = None
 
             # Run training
             out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
