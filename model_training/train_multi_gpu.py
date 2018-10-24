@@ -893,6 +893,10 @@ class Model_Trainer():
 
         # pbar = tqdm(total=len(data_prov.data_list)//BATCH_SIZE, ncols=100)
         pbar = tqdm(total=num_iters, ncols=100)
+
+        # timeline
+        if TRACE_PERFORMANCE:
+            self.timeline_dict = None
         
         for ii in range(num_iters) :
             start_time = time.time()
@@ -925,8 +929,15 @@ class Model_Trainer():
             if TRACE_PERFORMANCE:
                 fetched_timeline = timeline.Timeline(run_metadata.step_stats)
                 chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                chrome_trace_dict = json.loads(chrome_trace)
+                if not self.timeline_dict:
+                    self.timeline_dict = chrome_trace_dict
+                else:
+                    for event in chrome_trace_dict['traceEvents']:
+                        if 'ts' in event:
+                            self.timeline_dict['traceEvents'].append(event)
                 with open('timeline.json', 'w') as fp:
-                    fp.write(chrome_trace)
+                    json.dump(chrome_trace, fp)
 
             # import pdb;pdb.set_trace()
 
