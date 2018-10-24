@@ -192,7 +192,8 @@ class Model_Trainer():
         split = 'train'
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
-        output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
 
         # shuffle the list outside tf so I know the order. 
         #np.random.seed(5)
