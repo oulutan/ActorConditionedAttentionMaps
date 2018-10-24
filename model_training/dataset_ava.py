@@ -181,7 +181,7 @@ def get_video_frames(segment_key, split):
         timestep += 1
  
     video.close()
-    return sample
+    return sample.astype(np.float32)
  
 def get_labels(segment_key,split):
     # sample_annotations = sample_info['annotations']
