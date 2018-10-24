@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.client import timeline
 import json
 import os
 import argparse
@@ -908,14 +909,23 @@ class Model_Trainer():
             #import pdb;pdb.set_trace()
             
             # for oom cases
-            run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
+            run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True, trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
 
             # Run training
-            out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options)
+            out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
             if GENERATE_ATTN_MAPS:
                 for nnn in range(out_dict['no_dets'][0]):
                     img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'],
                                                                 out_dict['rois'], nnn, 5)
+
+            # Trace the timeline for debugging performance
+            if TRACE_PERFORMANCE:
+                fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+                chrome_trace = fetched_timeline.generate_chrome_trace_format()
+                with open('timeline.json', 'w') as fp:
+                    fp.write(chrome_trace)
+
             # import pdb;pdb.set_trace()
 
             #### aug debug
