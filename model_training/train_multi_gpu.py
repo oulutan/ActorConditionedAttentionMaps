@@ -937,7 +937,7 @@ class Model_Trainer():
                         if 'ts' in event:
                             self.timeline_dict['traceEvents'].append(event)
                 with open('timeline.json', 'w') as fp:
-                    json.dump(chrome_trace, fp)
+                    json.dump(self.timeline_dict, fp)
 
             # import pdb;pdb.set_trace()
 
