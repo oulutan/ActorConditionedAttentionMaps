@@ -835,8 +835,6 @@ class Model_Trainer():
                     'roi_labels': self.input_labels,
                     'segment_keys': self.segment_keys,
                     'no_dets': self.no_dets,
-                    'input_batch': self.input_batch,
-                    'rois': self.rois
                     # 'correct_preds': self.correct_preds,
                     }
         feed_dict = {}
@@ -844,9 +842,11 @@ class Model_Trainer():
         ### aug debug
         # run_dict['shifted_rois'] = self.shifted_keyframe_rois
         # run_dict['regular_rois'] = self.regular_keyframe_rois
-        if self.architecture_str == 'soft_attn':
+        if self.architecture_str == 'soft_attn' and GENERATE_ATTN_MAPS:
             run_dict['attention_map'] = tf.get_collection('attention_map')[0]
             run_dict['feature_activations'] = tf.get_collection('feature_activations')[0]
+            run_dict['input_batch'] = self.input_batch
+            run_dict['rois'] = self.rois
 
         if training_flag: 
             run_dict['optimization_op'] = self.optimization_op
