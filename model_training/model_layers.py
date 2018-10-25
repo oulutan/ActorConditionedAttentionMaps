@@ -91,7 +91,7 @@ def non_local_ROI_model(roi_box_features, context_features, cur_b_idx, is_traini
         B = tf.shape(context_features)[0]
 
 
-        feature_map_channel = Cr / 4
+        feature_map_channel = Cr / 2
 
         roi_embedding = tf.layers.conv3d(roi_box_features, filters=feature_map_channel, kernel_size=[1,1,1], padding='SAME', activation=tf.nn.relu, name='RoiEmbedding')
         context_embedding = tf.layers.conv3d(context_features, filters=feature_map_channel, kernel_size=[1,1,1], padding='SAME', activation=tf.nn.relu, name='ContextEmbedding')
