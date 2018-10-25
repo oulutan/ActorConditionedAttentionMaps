@@ -26,6 +26,7 @@ all_vids = [vid.strip() for vid in all_vids]
 annotations_dict = {}
 for vid_key in tqdm(all_vids):
     action, vid_id = vid_key.split(" ")
+    vid_id = vid_id.split(".avi")[0]
     
     # read joints file
     joints_file = os.path.join(JOINTS_FOLDER, action, vid_id, 'joint_positions.mat')
