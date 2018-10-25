@@ -25,25 +25,28 @@ all_vids = [vid.strip() for vid in all_vids]
 
 annotations_dict = {}
 for vid_key in tqdm(all_vids):
-    action, vid_id = vid_key.split(" ")
-    vid_id = vid_id.split(".avi")[0]
+    action, vid_id_avi = vid_key.split(" ")
+    vid_id = vid_id_avi.split(".avi")[0]
     
     # read joints file
     joints_file = os.path.join(JOINTS_FOLDER, action, vid_id, 'joint_positions.mat')
     joints = sio.loadmat(joints_file)['pos_img']
 
     # get video information
-    video_path = os.path.join(VIDS_FOLDER, action, vid_id)
+    video_path = os.path.join(VIDEOS_FOLDER, action, vid_id_avi)
     video = imageio.get_reader(video_path)
     vidinfo = video.get_meta_data()
 
     no_frames = vidinfo['nframes']
-    assert no_frames == joints.shape[-1]
+    #assert no_frames == joints.shape[-1]
+    #if no_frames != joints.shape[-1]:
+    #    import pdb;pdb.set_trace()
+    
     W, H = vidinfo['size']
 
     bboxes = [] 
     # generate bounding boxes
-    for ii in range(no_frames):
+    for ii in range(joints.shape[-1]):
         cur_joints = joints[:,:,ii]
         #[0,:,:] is in width, [1,:,:] is in height
         top = np.min(cur_joints[1])
@@ -67,7 +70,7 @@ for vid_key in tqdm(all_vids):
 
         bboxes.append([topn, leftn, bottomn, rightn])
 
-    print('%s done!' % vid_key)
+    tqdm.write('%s done!' % vid_key)
     annotations_dict[vid_id] = {'vid_id': vid_id, 
                                 'action':action,
                                 'height':H,
