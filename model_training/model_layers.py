@@ -12,7 +12,7 @@ def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx,
         class_feats = i3d_tail_model(box_features, is_training)
     elif architecture_str == 'non_local_v1':
         box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
-        class_feats =  non_local_ROI_model(box_features, features, cur_b_idx)
+        class_feats =  non_local_ROI_model(box_features, features, cur_b_idx, is_training)
     elif  architecture_str == 'non_local_attn':
         box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         class_feats =  non_local_ROI_feat_attention_model(box_features, features, cur_b_idx)
@@ -124,9 +124,19 @@ def non_local_ROI_model(roi_box_features, context_features, cur_b_idx, is_traini
         # Residual connection
         residual_feature = roi_box_features + non_local_feature
 
-    i3d_tail_feats = i3d_tail_model(residual_feature, is_training)
+    # i3d_tail_feats = i3d_tail_model(residual_feature, is_training)
 
-    return i3d_tail_feats
+    # return i3d_tail_feats
+    # i3d_tail_feats = self.i3d_tail_model(residual_feature)
+    # return i3d_tail_feats
+    with tf.variable_scope('Tail_I3D'):
+        tail_end_point = 'Mixed_5c'
+        # tail_end_point = 'Mixed_4f'
+        final_i3d_feat, end_points = i3d_model.i3d_tail(residual_feature, is_training, tail_end_point)
+    
+    # classification
+    class_feats = basic_model(final_i3d_feat)
+    return class_feats
 
 # def non_local_ROI_feat_attention_model(self, roi_box_features, context_features, cur_b_idx):
 #     '''
