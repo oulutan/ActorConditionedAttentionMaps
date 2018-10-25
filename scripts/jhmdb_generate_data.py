@@ -4,6 +4,7 @@ import imageio
 from tqdm import tqdm
 import numpy as np
 import json
+import cv2
 
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
@@ -39,15 +40,17 @@ def generate_annotation_file():
         vidinfo = video.get_meta_data()
 
         no_frames = vidinfo['nframes']
+        no_anns = joints.shape[-1]
         #assert no_frames == joints.shape[-1]
         #if no_frames != joints.shape[-1]:
         #    import pdb;pdb.set_trace()
+        
         
         W, H = vidinfo['size']
 
         bboxes = [] 
         # generate bounding boxes
-        for ii in range(joints.shape[-1]):
+        for ii in range(no_anns):
             cur_joints = joints[:,:,ii]
             #[0,:,:] is in width, [1,:,:] is in height
             top = np.min(cur_joints[1])
@@ -70,6 +73,13 @@ def generate_annotation_file():
             rightn = float(right) / float(W)
 
             bboxes.append([topn, leftn, bottomn, rightn])
+        
+        # videos have more frames than annotations
+        # strecth them out
+        interpolated_bboxes = []
+        indices = (no_anns-1) * np.arange(no_frames) // (no_frames-1)
+        for idx in indices:
+            interpolated_bboxes.append(bboxes[idx])
 
         tqdm.write('%s done!' % vid_key)
         annotations_dict[vid_id] = {'vid_id': vid_id, 
@@ -77,7 +87,7 @@ def generate_annotation_file():
                                     'height':H,
                                     'width': W,
                                     'nframes': no_frames,
-                                    'frame_boxes': bboxes}
+                                    'frame_boxes': interpolated_bboxes}
 
     annotation_file = DATA_FOLDER + 'segment_annotations.json'
 
@@ -88,7 +98,7 @@ def generate_annotation_file():
 
 def get_frame_generator(vid_key):
     action, vid_id = vid_key.split(" ")
-    video_path = os.path.join(VIDS_FOLDER, action, vid_id)
+    video_path = os.path.join(VIDEOS_FOLDER, action, vid_id)
 
     video = imageio.get_reader(video_path)
     gen = video.iter_data()
@@ -99,7 +109,7 @@ def draw_objects(frame, detections):
     H,W,C = frame.shape
     for bbid, bbox in enumerate(detections):
         color = COLORS[bbid,:]
-        current_bbox = bbox['box']
+        current_bbox = bbox
 
         top, left, bottom, right = current_bbox
         left = int(W * left)
@@ -108,10 +118,12 @@ def draw_objects(frame, detections):
         top = int(H * top)
         bottom = int(H * bottom)
 
-        conf = bbox['score']
+        # conf = bbox['score']
+        conf = 1.0
         if conf < 0.20:
             continue
-        label = bbox['class_str']
+        # label = bbox['class_str']
+        label = 'Annotation'
         message = label + ' %.2f' % conf
 
         cv2.rectangle(frame, (left,top), (right,bottom), color, 2)
@@ -143,10 +155,13 @@ def visualize_annotations():
         # get video information
         vid_gen = get_frame_generator(vid_key)
 
-        for ff in range(len(ann['frame_boxes'])):
+        for ff in range(ann['nframes']):
             frame = vid_gen.next()
             current_box = ann['frame_boxes'][ff]
-            draw_objects(frame, [current_box])
+            disp_frame = frame.copy()
+            draw_objects(disp_frame, [current_box])
+            cv2.imshow('anns', disp_frame)
+            cv2.waitKey(0)
 
 
 
