@@ -32,7 +32,7 @@ import json
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
-RESULTS_FOLDER = AVA_FOLDER + '/AVA/result_mAPs'
+RESULTS_FOLDER = AVA_FOLDER + '/result_mAPs'
 
 def print_time(message, start):
   logging.info("==> %g seconds to %s", time.time() - start, message)

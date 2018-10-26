@@ -1,6 +1,6 @@
 import numpy as np
 import json
-import dataset_tf
+import dataset_ava
 import os
 import argparse
 from tqdm import tqdm
@@ -22,7 +22,8 @@ SPLIT = 'val'
 #RESULT_NAME = 'TEST_Results_basicmodel_augment_balanced_tuning_sgd_42'
 #SPLIT = 'test'
 
-AVA_FOLDER = os.environ['AVA_DIR'] + '/AVA'
+ACAM_FOLDER = os.environ['ACAM_DIR']
+AVA_FOLDER = ACAM_FOLDER + '/data/AVA'
 RESULTS_FOLDER = AVA_FOLDER + '/ActionResults/'
 RESULTS_PATH = RESULTS_FOLDER + '%s.txt' % RESULT_NAME
 #RESULTS_PATH = '/media/sidious_data/AVA/important_results/%s.txt' % RESULT_NAME
@@ -55,7 +56,7 @@ def read_serialized_results(file_path):
 #     nms_dict = {}
 #     print('Nms on object detection!')
 #     for cur_key in tqdm(keys):
-#         detections = dataset_tf.get_obj_detection_results(cur_key, split)
+#         detections = dataset_ava.get_obj_detection_results(cur_key, split)
 
 #         dets = []
 #         for cur_det in detections:
@@ -92,7 +93,7 @@ def read_serialized_results(file_path):
 #         cur_preds = result[3]
 
         
-#         detections = dataset_tf.get_obj_detection_results(cur_key, split)
+#         detections = dataset_ava.get_obj_detection_results(cur_key, split)
         
         
 #         cur_detection = detections[cur_roi_id]
@@ -103,7 +104,7 @@ def read_serialized_results(file_path):
 
 #         # DEBUGGING
 #         # if print_flag: print('USING GROUND TRUTH BOXES!!!!'); print_flag=False
-#         # annotations = dataset_tf.ANNOS_VAL[cur_key]
+#         # annotations = dataset_ava.ANNOS_VAL[cur_key]
 #         # left, top, right, bottom = annotations[cur_roi_id]['bbox']
 
 #         # ava style
@@ -111,12 +112,12 @@ def read_serialized_results(file_path):
 #         if cur_box not in nms_dict[cur_key]:
 #             continue
 
-#         for cc in range(dataset_tf.NUM_CLASSES):
+#         for cc in range(dataset_ava.NUM_CLASSES):
 #             cur_probability = cur_preds[cc] * object_prob
 #             # cur_probability = cur_preds[cc]
 #             # cur_probability = cur_truths[cc] # what if we have every label correct
 
-#             cur_action_id = dataset_tf.TRAIN2ANN[str(cc)]['ann_id'] # this is string
+#             cur_action_id = dataset_ava.TRAIN2ANN[str(cc)]['ann_id'] # this is string
 #             if cur_probability < 0.001:
 #             # if cur_probability < 0.005:
 #             # if cur_probability < 0.01:
@@ -151,7 +152,7 @@ def convert_results(all_results, split='val'):
         cur_preds = result[3]
 
         
-        detections = dataset_tf.get_obj_detection_results(cur_key, split)
+        detections = dataset_ava.get_obj_detection_results(cur_key, split)
         
         
         cur_detection = detections[cur_roi_id]
@@ -162,19 +163,19 @@ def convert_results(all_results, split='val'):
 
         # DEBUGGING
         # if print_flag: print('USING GROUND TRUTH BOXES!!!!'); print_flag=False
-        # annotations = dataset_tf.ANNOS_VAL[cur_key]
+        # annotations = dataset_ava.ANNOS_VAL[cur_key]
         # left, top, right, bottom = annotations[cur_roi_id]['bbox']
 
         # ava style
         cur_box = [left, top, right, bottom]
 
 
-        for cc in range(dataset_tf.NUM_CLASSES):
+        for cc in range(dataset_ava.NUM_CLASSES):
             cur_probability = cur_preds[cc] * object_prob
             # cur_probability = cur_preds[cc]
             # cur_probability = cur_truths[cc] # what if we have every label correct
 
-            cur_action_id = dataset_tf.TRAIN2ANN[str(cc)]['ann_id'] # this is string
+            cur_action_id = dataset_ava.TRAIN2ANN[str(cc)]['ann_id'] # this is string
             if cur_probability < 0.001:
             # if cur_probability < 0.005:
             # if cur_probability < 0.01:
@@ -265,7 +266,7 @@ def non_max_suppression(result_list):
         max_IoU = 0.0
         for pp in range(len(picks)):
             pick_box = picks[pp]['box']
-            IoU = dataset_tf.IoU_box(cur_box, pick_box)
+            IoU = dataset_ava.IoU_box(cur_box, pick_box)
             if IoU > max_IoU: max_IoU = IoU
 
         if max_IoU < IoU_th:
