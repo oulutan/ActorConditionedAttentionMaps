@@ -1141,7 +1141,7 @@ def custom_loader(sess, ckpt_file):
     global_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
     var_map = {}
     for variable in global_vars:
-        if "Adam" not in variable.name:
+        if "Adam" not in variable.name and "moving" not in variable.name:
             map_name = variable.name.replace(':0', '')
             if "I3D_Model" in variable.name:
                 map_name = map_name.replace('I3D_Model', 'RGB')
