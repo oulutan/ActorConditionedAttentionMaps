@@ -11,6 +11,7 @@ import json
 import cv2
 import imageio
  
+from sklearn.metrics import average_precision_score
 # import models.extra_layers as extra_layers
 
 
@@ -75,7 +76,7 @@ ACT_STR_TO_NO = {
     'wave':20
 }
 
-ACT_NO_TO_STR = {ACT_STR_TO_NO[strkey] for strkey in ACT_STR_TO_NO.keys()} 
+ACT_NO_TO_STR = {ACT_STR_TO_NO[strkey]:strkey for strkey in ACT_STR_TO_NO.keys()} 
 
 ANNOTATIONS_FILE = DATA_FOLDER + 'segment_annotations.json'
 with open(ANNOTATIONS_FILE) as fp:
@@ -102,7 +103,7 @@ def get_train_list():
                 train_vids.append(vid_str)
 
         train_segments.extend(train_vids)
-    return train_segments
+    return train_segments * 20
 
 # during validation we will go through all frames individually. 
 def get_val_list():
@@ -151,7 +152,7 @@ def get_video_frames(segment_key, split):
 
     for ii in range(INPUT_T):
         cur_frame_idx = center_frame - INPUT_T // 2 + ii
-        if cur_frame_idx < 0 or (split =='train' and cur_frame_idx >= int(frame_info)):
+        if cur_frame_idx < 0 or cur_frame_idx >= ANNOTATIONS[vidname]['nframes'] :
             continue
         else:
             frame = video.get_data(cur_frame_idx)

@@ -27,7 +27,7 @@ import time
 
 DATE = time.strftime("%b-%d-time-%H-%M-%S") # Feb-10-time-7-36
 
-NUM_EPOCHS = 1
+NUM_EPOCHS = 10
 TRAINING_ITERS = 5000
 # TRAINING_ITERS = 1 # debug
 VALIDATION_ITERS = 5000 # not used while balanced_validation
@@ -740,10 +740,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                #model_saver.restore(sess, ckpt_file)
-                #logging.info('Loading model checkpoint from: ' + ckpt_file)
-                custom_loader(sess,ckpt_file)
-                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                model_saver.restore(sess, ckpt_file)
+                logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
@@ -1083,8 +1083,10 @@ class Model_Trainer():
         if not self.run_test:
             if self.dataset_str == 'ava':
                 class_AP_str = process_results.get_AP_str(all_results)
-            else self.dataset_str == 'jhmdb':
+            elif self.dataset_str == 'jhmdb':
                 class_AP_str = self.dataset_fcn.get_AP_str(all_results)
+            else:
+                raise NotImplementedError
             logging.info('\n'+ split_name + '\n')
             logging.info('\nAverage Precision for each class \n' + class_AP_str)
             logging.info( split_name + '\n')
