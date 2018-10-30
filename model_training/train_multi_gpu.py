@@ -1081,7 +1081,10 @@ class Model_Trainer():
         
         # do it for training also
         if not self.run_test:
-            class_AP_str = process_results.get_AP_str(all_results)
+            if self.dataset_str == 'ava':
+                class_AP_str = process_results.get_AP_str(all_results)
+            else self.dataset_str == 'jhmdb':
+                class_AP_str = self.dataset_fcn.get_AP_str(all_results)
             logging.info('\n'+ split_name + '\n')
             logging.info('\nAverage Precision for each class \n' + class_AP_str)
             logging.info( split_name + '\n')

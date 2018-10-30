@@ -51,7 +51,7 @@ with open(ALL_VIDS_FILE) as fp:
 ALL_ACTIONS = list(set([v.split(" ")[0] for v in ALL_VIDS]))
 ALL_ACTIONS.sort()
 
-ACTION_MAPPING = {
+ACT_STR_TO_NO = {
     'brush_hair':0,
     'catch':1,
     'clap':2,
@@ -74,6 +74,8 @@ ACTION_MAPPING = {
     'walk':19,
     'wave':20
 }
+
+ACT_NO_TO_STR = {ACT_STR_TO_NO[strkey] for strkey in ACT_STR_TO_NO.keys()} 
 
 ANNOTATIONS_FILE = DATA_FOLDER + 'segment_annotations.json'
 with open(ANNOTATIONS_FILE) as fp:
@@ -237,7 +239,7 @@ def match_annos_with_detections(annotations, detections, action):
                 continue
             matched_ann = annotations[index_for_each_det[dd]]
             
-            labels_np[dd, ACTION_MAPPING[action]] = 1
+            labels_np[dd, ACT_STR_TO_NO[action]] = 1
 
  
     return labels_np, rois_np, no_det
@@ -270,3 +272,66 @@ def IoU_box(box1, box2):
     IoU = areaIntersection / float(area1 + area2 - areaIntersection)
     return IoU
     
+
+def get_per_class_AP(results_list):
+    '''
+    results_list is a list where each
+    result = ['path' [multilabel-binary labels] [probs vector]]
+
+    returns per class_AP vector with class average precisions
+    '''
+    class_results = [{'truth':[], 'pred':[]} for _ in range(NUM_CLASSES)]
+
+    for result in results_list:
+        cur_key = result[0]
+        cur_roi_id = result[1]
+        cur_truths = result[2]
+        cur_preds = result[3]
+        
+        # cur_preds = np.random.uniform(size=40)
+        # cur_preds = [0 for _ in range(40)]
+
+        for cc in range(NUM_CLASSES):
+            class_results[cc]['truth'].append(cur_truths[cc])
+            class_results[cc]['pred'].append(cur_preds[cc])
+
+    ground_truth_count = []
+    class_AP = []
+    for cc in range(NUM_CLASSES):
+        y_truth = class_results[cc]['truth']
+        y_pred = class_results[cc]['pred']
+        AP = average_precision_score(y_truth, y_pred)
+
+        # print(AP)
+        # plot_pr_curve(y_truth, y_pred)
+        # import pdb; pdb.set_trace()
+
+        if np.isnan(AP): AP = 0
+
+        class_AP.append(AP)
+        ground_truth_count.append(sum(y_truth))
+        
+    # import pdb; pdb.set_trace()
+    return class_AP, ground_truth_count
+
+def get_class_AP_str(class_AP, cnt):
+    ''' Returns a printable string'''
+    ap_str = ''
+    for cc in range(NUM_CLASSES):
+        class_str = ACT_NO_TO_STR[cc][0:15] # just take the first 15 chars, some of them are too long
+        class_cnt = cnt[cc]
+        AP = class_AP[cc]
+        # AP = AP if not np.isnan(AP) else 0
+        # cur_row = '%s:    %i%% \n' %(class_str, AP*100)#class_str + ':    ' + str(tools.get_3_decimal_float(AP)) + '\n'
+        cur_row = class_str + '(%i)' % class_cnt + ':'
+        cur_row += (' ' * (25 -len(cur_row))) + '%.1f%%\n' % (AP*100.0)
+        ap_str += cur_row
+    class_avg = np.mean(class_AP)
+    # class_avg = class_avg if not np.isnan(class_avg) else 0
+    ap_str += '\n' + 'Average:' + (' '*17) + '%.1f%%\n' % (class_avg*100.0)
+    return ap_str
+
+def get_AP_str(results_list):
+    class_AP, cnt = get_per_class_AP(results_list)
+    ap_str = get_class_AP_str(class_AP, cnt)
+    return ap_str
