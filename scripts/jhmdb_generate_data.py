@@ -82,7 +82,7 @@ def generate_annotation_file():
             interpolated_bboxes.append(bboxes[idx])
 
         tqdm.write('%s done!' % vid_key)
-        annotations_dict[vid_id] = {'vid_id': vid_id, 
+        annotations_dict[vid_id_avi] = {'vid_id': vid_id, 
                                     'action':action,
                                     'height':H,
                                     'width': W,
@@ -167,5 +167,5 @@ def visualize_annotations():
 
 
 if __name__ == '__main__':
-    # generate_annotation_file()
-    visualize_annotations()
+    generate_annotation_file()
+    # visualize_annotations()

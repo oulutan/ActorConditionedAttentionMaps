@@ -31,6 +31,7 @@ ACAM_FOLDER = os.environ['ACAM_DIR']
 JHMDB_FOLDER = ACAM_FOLDER + '/data/JHMDB' 
 
 VIDEOS_FOLDER = JHMDB_FOLDER + '/ReCompress_Videos/'
+OBJECT_DETECTIONS_FOLDER = JHMDB_FOLDER + '/objects/'
 DATA_FOLDER = JHMDB_FOLDER + '/data/'
 SPLIT_INFO_FOLDER = JHMDB_FOLDER + '/splits/'
 
@@ -88,6 +89,7 @@ def get_train_list():
         fname = SPLIT_INFO_FOLDER + '%s_test_split%i.txt' % (act, SPLIT_NO)
         with open(fname) as fp:
             vids_info = fp.readlines()
+        vids_info = [v.strip() for v in vids_info]
         # vidname 1: 1 means training
         # train_vids = ["%s %s 0" % (act, v.split(" ")[0]) for v in vids_info if v.split(" ")[1] == '1']
         train_vids = []
@@ -107,6 +109,7 @@ def get_val_list():
         fname = SPLIT_INFO_FOLDER + '%s_test_split%i.txt' % (act, SPLIT_NO)
         with open(fname) as fp:
             vids_info = fp.readlines()
+        vids_info = [v.strip() for v in vids_info]
         # vidname 1: 1 means training
         # val_vids = ["%s %s" % (act, v.split(" ")[0]) for v in vids_info if v.split(" ")[1] == '1']
         val_vids = []
@@ -165,7 +168,7 @@ def get_labels(segment_key, split, center_frame):
 
     ann_box = sample_annotations['frame_boxes'][center_frame]
 
-    detection_results_file = os.path.join(OBJECT_DETECTIONS_FOLDER, act, "%s.json" % vid_id)
+    detection_results_file = os.path.join(OBJECT_DETECTIONS_FOLDER, action, "%s.json" % vidname)
     with open(detection_results_file) as fp:
         detection_results = json.load(fp)
     detection_boxes = detection_results['frame_objects'][center_frame]
