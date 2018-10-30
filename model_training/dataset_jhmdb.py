@@ -48,6 +48,31 @@ ALL_VIDS_FILE = DATA_FOLDER + 'all_vids.txt'
 with open(ALL_VIDS_FILE) as fp:
     ALL_VIDS = fp.readlines()
 ALL_ACTIONS = list(set([v.split(" ")[0] for v in ALL_VIDS]))
+ALL_ACTIONS.sort()
+
+ACTION_MAPPING = {
+    'brush_hair':0,
+    'catch':1,
+    'clap':2,
+    'climb_stairs':3,
+    'golf':4,
+    'jump':5,
+    'kick_ball':6,
+    'pick':7,
+    'pour':8,
+    'pullup':9,
+    'push':10,
+    'run':11,
+    'shoot_ball':12,
+    'shoot_bow':13,
+    'shoot_gun':14,
+    'sit':15,
+    'stand':16,
+    'swing_baseball':17,
+    'throw':18,
+    'walk':19,
+    'wave':20
+}
 
 ANNOTATIONS_FILE = DATA_FOLDER + 'segment_annotations.json'
 with open(ANNOTATIONS_FILE) as fp:
@@ -98,9 +123,147 @@ def get_val_list():
 
 def get_data(segment_key, split):
     
-    sample = get_video_frames(segment_key, split)
-    labels_np, rois_np, no_det = get_labels(segment_key,split)
+    sample, center_frame = get_video_frames(segment_key, split)
+    labels_np, rois_np, no_det = get_labels(segment_key,split, center_frame)
 
     return sample, labels_np, rois_np, no_det, segment_key
 
 def get_video_frames(segment_key, split):
+
+    vidname, frame_info = segment_key.split(' ')
+    action = ANNOTATIONS[vidname]['action']
+    if split == 'train':
+        # if its train frame info is total number of frames in the segments
+        center_frame = np.random.randint(low=0, high=int(frame_info))
+    else:
+        center_frame = int(frame_info)
+    
+
+    vid_path = os.path.join(VIDEOS_FOLDER, action, vidname)
+    video = imageio.get_reader(vid_path, 'ffmpeg')
+
+    sample = np.zeros([INPUT_T, INPUT_H, INPUT_W, 3], np.uint8)
+
+    for ii in range(INPUT_T):
+        cur_frame_idx = center_frame - INPUT_T // 2 + ii
+        if cur_frame_idx < 0 or (split =='train' and cur_frame_idx >= int(frame_info)):
+            continue
+        else:
+            frame = video.get_data(cur_frame_idx)
+            # frame = frame[:,:,::-1] #opencv reads bgr, i3d trained with rgb
+            reshaped = cv2.resize(frame, (INPUT_W, INPUT_H))
+            sample[ii,:,:,:] = reshaped
+
+    video.close()
+
+    return sample.astype(np.float32), center_frame
+
+def get_labels(segment_key, split, center_frame):
+    vidname, frame_info = segment_key.split(' ')
+    sample_annotations = ANNOTATIONS[vidname]
+    action = sample_annotations['action']
+
+    ann_box = sample_annotations['frame_boxes'][center_frame]
+
+    detection_results_file = os.path.join(OBJECT_DETECTIONS_FOLDER, act, "%s.json" % vid_id)
+    with open(detection_results_file) as fp:
+        detection_results = json.load(fp)
+    detection_boxes = detection_results['frame_objects'][center_frame]
+    detection_boxes = [detbox for detbox in detection_boxes if detbox['class_str'] == 'person']
+
+    labels_np, rois_np, no_det = match_annos_with_detections([ann_box], detection_boxes, action)
+
+    return labels_np, rois_np, no_det
+
+
+
+MATCHING_IOU = 0.5
+def match_annos_with_detections(annotations, detections, action):
+    # gt_boxes = []
+    # for ann in annotations:
+    #     # left, top, right, bottom
+    #     # [0.07, 0.141, 0.684, 1.0]
+    #     cur_box = ann['bbox'] 
+    #     gt_boxes.append(cur_box)
+    gt_boxes = annotations
+ 
+    det_boxes = []
+    for detection in detections:
+        # top, left, bottom, right
+        # [0.07, 0.006, 0.981, 0.317]
+        # top, left, bottom, right = detection['box'] 
+        # box = left, top, right, bottom
+        box = detection['box']
+        class_label = detection['class_str']
+        det_boxes.append(box)
+ 
+    no_gt = len(gt_boxes)
+    no_det = len(det_boxes)
+ 
+    iou_mtx = np.zeros([no_gt, no_det])
+ 
+    for gg in range(no_gt):
+        gt_box = gt_boxes[gg]
+        for dd in range(no_det):
+            dt_box = det_boxes[dd]
+            iou_mtx[gg,dd] = IoU_box(gt_box, dt_box)
+ 
+    # assume less than #MAX_ROIS boxes in each image
+    if no_det > MAX_ROIS: print('MORE DETECTIONS THAN MAX ROIS!!')
+    labels_np = np.zeros([MAX_ROIS, NUM_CLASSES], np.int32)
+    rois_np = np.zeros([MAX_ROIS, 4], np.float32) # the 0th index will be used as the featmap index
+ 
+    # TODO if no_gt or no_det is 0 this will give error
+    # This is fixed within functions calling this
+    if no_gt != 0 and no_det != 0:
+        max_iou_for_each_det = np.max(iou_mtx, axis=0)
+        index_for_each_det = np.argmax(iou_mtx, axis=0)
+            
+
+        for dd in range(no_det):
+            cur_max_iou = max_iou_for_each_det[dd]
+
+            
+            top, left, bottom, right = detections[dd]['box']
+
+            # # region of interest layer expects
+            # # regions of interest as lists of:
+            # # feature map index, upper left, bottom right coordinates
+            rois_np[dd,:] = [top, left, bottom, right]
+            if cur_max_iou < MATCHING_IOU:
+                continue
+            matched_ann = annotations[index_for_each_det[dd]]
+            
+            labels_np[dd, ACTION_MAPPING[action]] = 1
+
+ 
+    return labels_np, rois_np, no_det
+
+
+
+def IoU_box(box1, box2):
+    '''
+    top1, left1, bottom1, right1 = box1
+    top2, left2, bottom2, right2 = box2
+ 
+    returns intersection over union
+    '''
+    # left1, top1, right1, bottom1 = box1
+    # left2, top2, right2, bottom2 = box2
+    top1, left1, bottom1, right1 = box1
+    top2, left2, bottom2, right2 = box2
+ 
+    left_int = max(left1, left2)
+    top_int = max(top1, top2)
+ 
+    right_int = min(right1, right2)
+    bottom_int = min(bottom1, bottom2)
+ 
+    areaIntersection = max(0, right_int - left_int) * max(0, bottom_int - top_int)
+ 
+    area1 = (right1 - left1) * (bottom1 - top1)
+    area2 = (right2 - left2) * (bottom2 - top2)
+     
+    IoU = areaIntersection / float(area1 + area2 - areaIntersection)
+    return IoU
+    
