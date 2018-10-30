@@ -46,6 +46,8 @@ MAX_ROIS = 100
 # TEMP_RESOLUTION = 32
 
 USE_GROUND_TRUTH_BOXES = False
+
+MAX_ROIS_IN_TRAINING = 20
  
 # USE_TRACKER_TEMPORAL_ROIS = False
  
@@ -83,7 +85,8 @@ with open(annotations_path) as fp:
     ANNOS_TEST = json.load(fp)
 
 def get_train_list():
-    with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
+    # with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
+    with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
         train_detection_segments = json.load(fp)
     return train_detection_segments
  
@@ -234,7 +237,10 @@ def get_obj_detection_results(segment_key,split):
     detections = [det for det in detections if det['class_str'] == 'person']
     # filter out detection confidences so that i can train efficiently
     if split == 'train':
-        detections = [det for det in detections if det['score'] > 0.20]
+        # detections = [det for det in detections if det['score'] > 0.20]
+        if len(detections) > MAX_ROIS_IN_TRAINING:
+            # they are sorted by confidence already, take top #k
+            detections = detections[:MAX_ROIS_IN_TRAINING]
 
     # just so I can use these in get_tracker
     # detections[0]['height'] = H 
