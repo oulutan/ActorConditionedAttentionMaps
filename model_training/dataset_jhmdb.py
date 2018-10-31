@@ -44,6 +44,7 @@ RESULT_SAVE_PATH = JHMDB_FOLDER + '/ActionResults/split_%i' % SPLIT_NO
 # max amount of rois in a single image
 # this initializes the roi vector sizes as well
 MAX_ROIS = 100
+MAX_ROIS_IN_TRAINING = 20
 
 
 ALL_VIDS_FILE = DATA_FOLDER + 'all_vids.txt'
@@ -176,6 +177,12 @@ def get_labels(segment_key, split, center_frame):
         detection_results = json.load(fp)
     detection_boxes = detection_results['frame_objects'][center_frame]
     detection_boxes = [detbox for detbox in detection_boxes if detbox['class_str'] == 'person']
+    
+    if split == 'train':
+        # detections = [det for det in detections if det['score'] > 0.20]
+        if len(detection_boxes) > MAX_ROIS_IN_TRAINING:
+            # they are sorted by confidence already, take top #k
+            detection_boxes = detection_boxes[:MAX_ROIS_IN_TRAINING]
 
     labels_np, rois_np, no_det = match_annos_with_detections([ann_box], detection_boxes, action)
 

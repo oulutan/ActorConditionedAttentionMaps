@@ -24,6 +24,7 @@ from sklearn.metrics import classification_report
 
 
 import time
+import cv2
 
 DATE = time.strftime("%b-%d-time-%H-%M-%S") # Feb-10-time-7-36
 
@@ -451,6 +452,8 @@ class Model_Trainer():
 
         
         augmented_sequence, augmented_rois = input_augmentation.augment_input_sequences(cur_input_seq, cur_rois)
+        self.original_seq = cur_input_seq
+        self.augmented_seq = augmented_sequence
         cur_input_seq = tf.cond(self.is_training, lambda:augmented_sequence, lambda: cur_input_seq)
         cur_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
 
@@ -844,8 +847,10 @@ class Model_Trainer():
         feed_dict = {}
 
         ### aug debug
-        # run_dict['shifted_rois'] = self.shifted_keyframe_rois
-        # run_dict['regular_rois'] = self.regular_keyframe_rois
+        # run_dict['shifted_rois'] = self.shifted_rois
+        # run_dict['regular_rois'] = self.cur_rois
+        # run_dict['original_seq'] = self.original_seq
+        # run_dict['augmented_seq'] = self.augmented_seq
         if self.architecture_str == 'soft_attn' and GENERATE_ATTN_MAPS:
             run_dict['attention_map'] = tf.get_collection('attention_map')[0]
             run_dict['feature_activations'] = tf.get_collection('feature_activations')[0]
@@ -1157,6 +1162,30 @@ def custom_loader(sess, ckpt_file):
     custom_saver.restore(sess, ckpt_file)
     print('USED CUSTOM SAVER FOR LOADING CKPT!')
 
+COLORS = np.random.randint(0, 255, [100, 3])
+def draw_objects(frame, detections):
+    H,W,C = frame.shape
+    for bbid, bbox in enumerate(detections):
+        color = COLORS[bbid,:]
+
+        top, left, bottom, right = bbox
+        left = int(W * left)
+        right = int(W * right)
+
+        top = int(H * top)
+        bottom = int(H * bottom)
+
+        conf = 1.0
+        if conf < 0.20:
+            continue
+        label = 'person'
+        message = label + ' %.2f' % conf
+
+        cv2.rectangle(frame, (left,top), (right,bottom), color, 2)
+
+        font_size =  max(0.5,(right - left)/50.0/float(len(message)))
+        cv2.rectangle(frame, (left, top-int(font_size*40)), (right,top), color, -1)
+        cv2.putText(frame, message, (left, top-12), 0, font_size, (255,255,255)-color, 1)
 
 if __name__ == '__main__':
     main()
