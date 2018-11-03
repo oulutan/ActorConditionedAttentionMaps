@@ -1199,5 +1199,37 @@ def draw_objects(frame, detections):
         cv2.rectangle(frame, (left, top-int(font_size*40)), (right,top), color, -1)
         cv2.putText(frame, message, (left, top-12), 0, font_size, (255,255,255)-color, 1)
 
+
+def generate_topk_variance_attention_maps(attention_map, feature_activations, input_batch, rois, roi_index, k):
+    # img_to_show = cv2.resize(out_dict['attention_map'][0][4][:,:,index], (400,400), interpolation=0);cv2.imshow('map',cv2.applyColorMap(np.uint8(img_to_show*255),cv2.COLORMAP_JET))
+    time_index = 4
+    mask = np.float32(feature_activations != 0.)
+    masked_attention = attention_map * feature_activations
+    var_list = np.argsort(np.var(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
+    topk_vars = var_list[:k]
+
+    top, left, bottom, right = rois[0, roi_index]
+    input_frame = np.uint8(input_batch[0, 16])[:,:,::-1]
+    img_to_show = input_frame.copy()
+    H,W,C = img_to_show.shape
+    left = int(W * left)
+    right = int(W * right)
+    top = int(H * top)
+    bottom = int(H * bottom)
+    cv2.rectangle(img_to_show, (left,top), (right,bottom), (0,255,0), 2)
+    for ii in range(k):
+        cur_index = var_list[ii]
+        cur_attn_map = cv2.resize(masked_attention[roi_index][time_index][:,:,cur_index], (400,400), interpolation=0)
+        colored_map = cv2.applyColorMap(np.uint8(cur_attn_map*255),cv2.COLORMAP_JET)
+        overlay = input_frame.copy()
+        overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
+        img_to_show = np.concatenate([img_to_show, overlay], axis=1)
+
+    cv2.imshow('Maps', img_to_show)
+    cv2.waitKey(0)
+    # import pdb;pdb.set_trace()
+    cv2.destroyWindow('Maps')
+    return img_to_show
+
 if __name__ == '__main__':
     main()

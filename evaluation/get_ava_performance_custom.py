@@ -227,6 +227,27 @@ def combine_res_with_size(result_list):
     # cls_str, tr_size, val_size, cls_ap = term
     print("{:<40}{:<15}{:<15}{:.2f}".format(*term))
 
+  # 14: walk (person movement), 15: answer_phone (object manipulation), ..., 63: write (object man), 64: fight/hit person (person interaction)
+  movement_APs = []
+  object_APs = []
+  inter_APs = []
+  for cls_no_str in cls_nos:
+    cls_str = label_conv['ann2train'][cls_no_str]['class_str']
+    class_AP = res_dict[cls_str]
+    if int(cls_no_str) <= 14:
+        movement_APs.append(class_AP)
+    elif int(cls_no_str) <= 63:
+        object_APs.append(class_AP)
+    elif int(cls_no_str) <= 80:
+        inter_APs.append(class_AP)
+    else:
+        print("Wrong class id error")
+
+  print('\n')
+  print('\t\tMovement mAP:    %.4f' % np.mean(movement_APs))
+  print('\t\tObject mAP:      %.4f' % np.mean(object_APs))
+  print('\t\tInteraction mAP: %.4f' % np.mean(inter_APs))
+
   print('\n\t\tFinal mAP: %.4f\n' % mAP)
 
 
