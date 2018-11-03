@@ -511,7 +511,19 @@ class Model_Trainer():
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
             # pred_probs = tf.nn.softmax(logits)
             # In our case each logit is a probability itself
-            pred_probs = tf.nn.sigmoid(logits)
+            #if self.dataset_str == 'jhmdb':
+            #    pred_probs = tf.nn.softmax(logits)
+            #    logging.info("Optimizing on Softmax Loss")
+            #    softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
+            #                                                    logits=logits)
+            #    per_roi_loss = softmax_loss
+            #else:
+            if True:
+                pred_probs = tf.nn.sigmoid(logits)
+                logging.info("Optimizing on Sigmoid X-Entropy loss! ")
+                sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
+                                                                logits=logits)
+                per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
             # loss_val = tf.reduce_mean(-tf.reduce_sum(tf.cast(input_labels, tf.float32) * tf.log(tf.clip_by_value(pred_probs, 1e-10, 1e10)), reduction_indices=[1]))
             pred_probs = tf.clip_by_value(pred_probs, 1e-5, 1.0 - 1e-5)
             # pred_probs = tf.Print(pred_probs, [pred_probs], 'pred_probs:')
@@ -526,16 +538,16 @@ class Model_Trainer():
             # loss_val = tf.reduce_mean(sigmoid_loss)
 
             ## Sigmoid Xentropy averaged on samples, this allows having same gradients on multiple gpu training
-            logging.info("Optimizing on Sigmoid X-Entropy loss! ")
-            sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
-                                                                logits=logits)
+            #logging.info("Optimizing on Sigmoid X-Entropy loss! ")
+            #sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
+            #                                                    logits=logits)
 
-            per_roi_sigmoid_loss = tf.reduce_mean(sigmoid_loss, axis=1)
+            #per_roi_sigmoid_loss = tf.reduce_mean(sigmoid_loss, axis=1)
 
             no_dets = tf.cast(no_dets, tf.int32)
             total_no_of_detections = tf.reduce_sum(no_dets) # this is no_dets across all gpus
 
-            loss_val = tf.reduce_sum(per_roi_sigmoid_loss) / tf.cast(total_no_of_detections, tf.float32)
+            loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(total_no_of_detections, tf.float32)
 
             # # calculate the per RoI weight. We are doing this becuase we average on RoIs not samples
             # # I want each sample to have same weight compared to each RoI. Beacuse each samples can generated multiple roi proposals
