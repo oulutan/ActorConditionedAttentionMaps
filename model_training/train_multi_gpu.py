@@ -610,20 +610,20 @@ class Model_Trainer():
                 vars_to_reg.append(var)
 
         # if we are not training the whole model
-        # only regularize the trainable ones
-        if not TRAIN_FULL_MODEL:
-            trainable_vars = []
-            for var in vars_to_reg:
-                varname = var.name
-                found = False
-                for var_id in self.var_identifiers_for_training:
-                    if var_id in varname:
-                        found=True
-                        break
-                if found:
-                    trainable_vars.append(var)
-            
-            vars_to_reg = trainable_vars
+        # only regularize the trainable ones # nevermind they are not in gradients so they wont be updated anyways
+        # if not TRAIN_FULL_MODEL:
+        #     trainable_vars = []
+        #     for var in vars_to_reg:
+        #         varname = var.name
+        #         found = False
+        #         for var_id in self.var_identifiers_for_training:
+        #             if var_id in varname:
+        #                 found=True
+        #                 break
+        #         if found:
+        #             trainable_vars.append(var)
+        #     
+        #     vars_to_reg = trainable_vars
 
         logging.info('Regularizing following weights:\n'+'\n'.join(var.name for var in vars_to_reg))
 
