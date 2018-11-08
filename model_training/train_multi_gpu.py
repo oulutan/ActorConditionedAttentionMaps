@@ -511,7 +511,19 @@ class Model_Trainer():
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
             # pred_probs = tf.nn.softmax(logits)
             # In our case each logit is a probability itself
-            pred_probs = tf.nn.sigmoid(logits)
+            #if self.dataset_str == 'jhmdb':
+            #    pred_probs = tf.nn.softmax(logits)
+            #    logging.info("Optimizing on Softmax Loss")
+            #    softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
+            #                                                    logits=logits)
+            #    per_roi_loss = softmax_loss
+            #else:
+            if True:
+                pred_probs = tf.nn.sigmoid(logits)
+                logging.info("Optimizing on Sigmoid X-Entropy loss! ")
+                sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
+                                                                logits=logits)
+                per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
             # loss_val = tf.reduce_mean(-tf.reduce_sum(tf.cast(input_labels, tf.float32) * tf.log(tf.clip_by_value(pred_probs, 1e-10, 1e10)), reduction_indices=[1]))
             pred_probs = tf.clip_by_value(pred_probs, 1e-5, 1.0 - 1e-5)
             # pred_probs = tf.Print(pred_probs, [pred_probs], 'pred_probs:')
@@ -526,16 +538,16 @@ class Model_Trainer():
             # loss_val = tf.reduce_mean(sigmoid_loss)
 
             ## Sigmoid Xentropy averaged on samples, this allows having same gradients on multiple gpu training
-            logging.info("Optimizing on Sigmoid X-Entropy loss! ")
-            sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
-                                                                logits=logits)
+            #logging.info("Optimizing on Sigmoid X-Entropy loss! ")
+            #sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
+            #                                                    logits=logits)
 
-            per_roi_sigmoid_loss = tf.reduce_mean(sigmoid_loss, axis=1)
+            #per_roi_sigmoid_loss = tf.reduce_mean(sigmoid_loss, axis=1)
 
             no_dets = tf.cast(no_dets, tf.int32)
             total_no_of_detections = tf.reduce_sum(no_dets) # this is no_dets across all gpus
 
-            loss_val = tf.reduce_sum(per_roi_sigmoid_loss) / tf.cast(total_no_of_detections, tf.float32)
+            loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(total_no_of_detections, tf.float32)
 
             # # calculate the per RoI weight. We are doing this becuase we average on RoIs not samples
             # # I want each sample to have same weight compared to each RoI. Beacuse each samples can generated multiple roi proposals
@@ -598,20 +610,20 @@ class Model_Trainer():
                 vars_to_reg.append(var)
 
         # if we are not training the whole model
-        # only regularize the trainable ones
-        if not TRAIN_FULL_MODEL:
-            trainable_vars = []
-            for var in vars_to_reg:
-                varname = var.name
-                found = False
-                for var_id in self.var_identifiers_for_training:
-                    if var_id in varname:
-                        found=True
-                        break
-                if found:
-                    trainable_vars.append(var)
-            
-            vars_to_reg = trainable_vars
+        # only regularize the trainable ones # nevermind they are not in gradients so they wont be updated anyways
+        # if not TRAIN_FULL_MODEL:
+        #     trainable_vars = []
+        #     for var in vars_to_reg:
+        #         varname = var.name
+        #         found = False
+        #         for var_id in self.var_identifiers_for_training:
+        #             if var_id in varname:
+        #                 found=True
+        #                 break
+        #         if found:
+        #             trainable_vars.append(var)
+        #     
+        #     vars_to_reg = trainable_vars
 
         logging.info('Regularizing following weights:\n'+'\n'.join(var.name for var in vars_to_reg))
 
@@ -1159,7 +1171,8 @@ def custom_loader(sess, ckpt_file):
     var_map = {}
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
-        if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "CLS_Logits" not in variable.name: # for jhmdb
+        if "Adam" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')

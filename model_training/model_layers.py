@@ -71,6 +71,7 @@ def i3d_tail_model(roi_box_features, is_training):
         # tail_end_point = 'Mixed_4f'
         final_i3d_feat, end_points = i3d_model.i3d_tail(roi_box_features, is_training, tail_end_point)
         # final_i3d_feat = end_points[tail_end_point]
+        tf.add_to_collection('final_i3d_feats', final_i3d_feat)
         
         
         # flat_feats = tf.layers.flatten(final_i3d_feat)
@@ -253,24 +254,25 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
         gathered_context = tf.gather(context_features, cur_b_idx, axis=0, name='ContextGather')
         tf.add_to_collection('feature_activations', gathered_context) # for attn map generation
         soft_attention_feats = tf.multiply(attention_map, gathered_context)
-
-    with tf.variable_scope('Tail_I3D'):
-        tail_end_point = 'Mixed_5c'
-        # tail_end_point = 'Mixed_4f'
-        final_i3d_feat, end_points = i3d_model.i3d_tail(soft_attention_feats, is_training, tail_end_point)
     
-    tf.add_to_collection('final_i3d_feats', final_i3d_feat)
-    temporal_len = final_i3d_feat.shape[1]
-    avg_features = tf.nn.avg_pool3d(      final_i3d_feat,
-                                            ksize=[1, temporal_len, 3, 3, 1],
-                                            strides=[1, temporal_len, 3, 3, 1],
-                                            padding='SAME',
-                                            name='TemporalPooling')
 
-    # classification
-    class_feats = tf.layers.flatten(avg_features)
-
+    class_feats = i3d_tail_model(soft_attention_feats, is_training)
     return class_feats
+    # with tf.variable_scope('Tail_I3D'):
+    #     tail_end_point = 'Mixed_5c'
+    #     # tail_end_point = 'Mixed_4f'
+    #     final_i3d_feat, end_points = i3d_model.i3d_tail(soft_attention_feats, is_training, tail_end_point)
+    # 
+    # temporal_len = final_i3d_feat.shape[1]
+    # avg_features = tf.nn.avg_pool3d(      final_i3d_feat,
+    #                                         ksize=[1, temporal_len, 3, 3, 1],
+    #                                         strides=[1, temporal_len, 3, 3, 1],
+    #                                         padding='SAME',
+    #                                         name='TemporalPooling')
+    # # classification
+    # class_feats = tf.layers.flatten(avg_features)
+
+    # return class_feats
 
 def single_soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_training):
     with tf.variable_scope('Soft_Attention_Model'):
