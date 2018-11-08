@@ -229,10 +229,10 @@ class Model_Trainer():
             split = 'test'
         
         ## DEBUGGING
-        # val_detection_segments = ['1j20qq1JyX4.1108']
+        #val_detection_segments = ['1j20qq1JyX4.1108']
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Ov0za6Xb1LM')]
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18')]
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.11')]
+        #val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.11')]
         ## DEBUGGING
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
@@ -851,9 +851,10 @@ class Model_Trainer():
         # run_dict['regular_rois'] = self.cur_rois
         # run_dict['original_seq'] = self.original_seq
         # run_dict['augmented_seq'] = self.augmented_seq
-        if self.architecture_str == 'soft_attn' and GENERATE_ATTN_MAPS:
+        if (self.architecture_str == 'soft_attn'  or self.architecture_str == 'single_attn') and GENERATE_ATTN_MAPS:
             run_dict['attention_map'] = tf.get_collection('attention_map')[0]
             run_dict['feature_activations'] = tf.get_collection('feature_activations')[0]
+            run_dict['final_i3d_feats'] = tf.get_collection('final_i3d_feats')[0]
             run_dict['input_batch'] = self.input_batch
             run_dict['rois'] = self.rois
 
@@ -936,9 +937,15 @@ class Model_Trainer():
             # Run training
             out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
             if GENERATE_ATTN_MAPS:
+                roi_probs = out_dict['pred_probs']
                 for nnn in range(out_dict['no_dets'][0]):
-                    img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'],
-                                                                out_dict['rois'], nnn, 5)
+                    print('\n')
+                    print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
+                           get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
+                    img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
+                    #img = generate_attention_visualization(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
+                    #img = generate_attention_visualization(out_dict['attention_map'], out_dict['final_i3d_feats'], out_dict['input_batch'], out_dict['rois'], nnn)
+
 
             # Trace the timeline for debugging performance
             if TRACE_PERFORMANCE:
@@ -1188,13 +1195,22 @@ def draw_objects(frame, detections):
         cv2.putText(frame, message, (left, top-12), 0, font_size, (255,255,255)-color, 1)
 
 
-def generate_topk_variance_attention_maps(attention_map, feature_activations, input_batch, rois, roi_index, k):
+def generate_topk_variance_attention_maps(attention_map, feature_activations, input_batch, rois, roi_index, k=10):
     # img_to_show = cv2.resize(out_dict['attention_map'][0][4][:,:,index], (400,400), interpolation=0);cv2.imshow('map',cv2.applyColorMap(np.uint8(img_to_show*255),cv2.COLORMAP_JET))
     time_index = 4
     mask = np.float32(feature_activations != 0.)
-    masked_attention = attention_map * feature_activations
-    var_list = np.argsort(np.var(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
-    topk_vars = var_list[:k]
+    #masked_attention = attention_map * feature_activations
+    #masked_attention = attention_map * mask
+    masked_attention = feature_activations
+    #masked_attention = mask
+    #masked_attention = attention_map
+    #var_list = np.argsort(np.var(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
+    #var_list = np.argsort(np.sum(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
+    reshaped = np.reshape(masked_attention[roi_index][time_index], [-1,832])
+    total_n = np.sum(np.reshape(mask, [-1, 832]))
+    mean_val = np.sum(reshaped, axis=0) / total_n
+    var_list = np.argsort(np.sum((reshaped - mean_val)**2, axis=0) / total_n)[::-1]
+    #var_list = [0, 100, 200, 300, 400, 500, 600, 700, 800, 50, 150, 250, 350, 450]
 
     top, left, bottom, right = rois[0, roi_index]
     input_frame = np.uint8(input_batch[0, 16])[:,:,::-1]
@@ -1207,11 +1223,77 @@ def generate_topk_variance_attention_maps(attention_map, feature_activations, in
     cv2.rectangle(img_to_show, (left,top), (right,bottom), (0,255,0), 2)
     for ii in range(k):
         cur_index = var_list[ii]
-        cur_attn_map = cv2.resize(masked_attention[roi_index][time_index][:,:,cur_index], (400,400), interpolation=0)
-        colored_map = cv2.applyColorMap(np.uint8(cur_attn_map*255),cv2.COLORMAP_JET)
+        cur_attn_map = attention_map[roi_index][time_index][:,:,cur_index] * mask[roi_index][time_index][:,:,cur_index]
+        rsz_attn_map = cv2.resize(cur_attn_map, (400,400), interpolation=0)
+        max_val = np.max(rsz_attn_map)
+        normalized_image = np.uint8(rsz_attn_map / max_val * 255.)
+        colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
         overlay = input_frame.copy()
         overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
         img_to_show = np.concatenate([img_to_show, overlay], axis=1)
+
+    cv2.imshow('Maps', img_to_show)
+    cv2.waitKey(0)
+    # import pdb;pdb.set_trace()
+    cv2.destroyWindow('Maps')
+    return img_to_show
+
+def generate_attention_visualization(attention_map, feature_activations, input_batch, rois, roi_index):
+    time_index = 4
+    feat_time_index = feature_activations.shape[1]//2
+    mask = np.float32(feature_activations != 0.)
+    #mask = mask[roi_index, time_index]
+    #masked_attention = attention_map * feature_activations
+    #masked_attention = attention_map * mask
+    #masked_attention = feature_activations
+    #masked_attention = mask
+    masked_attention = attention_map * mask
+    #masked_attention = masked_attention[roi_index,time_index]
+    average_map = np.sum(masked_attention, axis=-1)
+    #average_map = np.sum(mask, axis=-1)
+
+    #var_list = np.argsort(np.var(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
+    #var_list = np.argsort(np.sum(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
+
+    top, left, bottom, right = rois[0, roi_index]
+    input_frame = np.uint8(input_batch[0, 16])[:,:,::-1]
+    img_to_show = input_frame.copy()
+    H,W,C = img_to_show.shape
+    left = int(W * left)
+    right = int(W * right)
+    top = int(H * top)
+    bottom = int(H * bottom)
+    cv2.rectangle(img_to_show, (left,top), (right,bottom), (0,255,0), 2)
+
+    # add the average_map
+    #avg_map = average_map[roi_index, time_index]
+    #if roi_index == 0:
+    #    avg_map = average_map[0,4,:] - average_map[1,4,:]
+    #elif roi_index == 1:
+    #    avg_map = average_map[1,4,:] - average_map[0,4,:]
+    #else:
+    #    avg_map = average_map[roi_index, 4, :]
+    avg_map = average_map[roi_index, feat_time_index, :]
+    rsz_avg_map = cv2.resize(avg_map, (400,400), interpolation=0)
+    min_val = np.min(rsz_avg_map)
+    max_val = np.max(rsz_avg_map - min_val)
+    normalized_image = np.uint8((rsz_avg_map-min_val) / max_val * 255.)
+    colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
+    overlay = input_frame.copy()
+    overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
+    img_to_show = np.concatenate([img_to_show, overlay], axis=1)
+
+
+    # for ii in range(k):
+    #     cur_index = var_list[ii]
+    #     cur_attn_map = attention_map[roi_index][time_index][:,:,cur_index] * mask[roi_index][time_index][:,:,cur_index]
+    #     rsz_attn_map = cv2.resize(cur_attn_map, (400,400), interpolation=0)
+    #     max_val = np.max(rsz_attn_map)
+    #     normalized_image = np.uint8(rsz_attn_map / max_val * 255.)
+    #     colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
+    #     overlay = input_frame.copy()
+    #     overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
+    #     img_to_show = np.concatenate([img_to_show, overlay], axis=1)
 
     cv2.imshow('Maps', img_to_show)
     cv2.waitKey(0)

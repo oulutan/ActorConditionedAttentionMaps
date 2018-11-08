@@ -10,6 +10,9 @@ def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx,
     if architecture_str == 'i3d_tail':
         box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         class_feats = i3d_tail_model(box_features, is_training)
+    elif architecture_str == 'basic_model':
+        box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+        class_feats = basic_model(box_features)
     elif architecture_str == 'non_local_v1':
         box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         class_feats =  non_local_ROI_model(box_features, features, cur_b_idx, is_training)
@@ -256,12 +259,14 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
         # tail_end_point = 'Mixed_4f'
         final_i3d_feat, end_points = i3d_model.i3d_tail(soft_attention_feats, is_training, tail_end_point)
     
+    tf.add_to_collection('final_i3d_feats', final_i3d_feat)
     temporal_len = final_i3d_feat.shape[1]
     avg_features = tf.nn.avg_pool3d(      final_i3d_feat,
                                             ksize=[1, temporal_len, 3, 3, 1],
                                             strides=[1, temporal_len, 3, 3, 1],
                                             padding='SAME',
                                             name='TemporalPooling')
+
     # classification
     class_feats = tf.layers.flatten(avg_features)
 
@@ -300,7 +305,7 @@ def single_soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, i
         roi_context_feats = tf.concat([roi_tiled, context_embedding_gathered], 4, name='RoiContextConcat')
 
         relation_feats = tf.layers.conv3d(  roi_context_feats, 
-                                            filters=Cc, 
+                                            filters=1, 
                                             kernel_size=[1,1,1], 
                                             padding='SAME', 
                                             activation=None, 
@@ -321,6 +326,7 @@ def single_soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, i
         # tail_end_point = 'Mixed_4f'
         final_i3d_feat, end_points = i3d_model.i3d_tail(soft_attention_feats, is_training, tail_end_point)
     
+    tf.add_to_collection('final_i3d_feats', final_i3d_feat)
     temporal_len = final_i3d_feat.shape[1]
     avg_features = tf.nn.avg_pool3d(      final_i3d_feat,
                                             ksize=[1, temporal_len, 3, 3, 1],
