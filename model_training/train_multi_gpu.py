@@ -1164,7 +1164,8 @@ def custom_loader(sess, ckpt_file):
     var_map = {}
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
-        if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "CLS_Logits" not in variable.name: # for jhmdb
+        if "Adam" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')
