@@ -133,6 +133,78 @@ def read_serialized_results(file_path):
 
 #     return output_strings
 
+def convert_results_per_box_nms(all_results,split='val'):
+    print("Converting results into per segment dict")
+    results = {}
+    for result in tqdm(all_results):
+        cur_key = result[0]
+        cur_video_id, cur_timestamp = cur_key.split('.')
+        cur_roi_id = result[1]
+        cur_truths = result[2]
+        cur_preds = result[3]
+
+        
+        detections = dataset_ava.get_obj_detection_results(cur_key, split)
+        
+        
+        cur_detection = detections[cur_roi_id]
+        # top, left, bottom, right
+        # [0.07, 0.006, 0.981, 0.317]
+        top, left, bottom, right = cur_detection['box']
+        object_prob = cur_detection['score']
+
+        ava_style_box = [left,top,right,bottom]
+        cur_result_object = {'box':ava_style_box, 'preds': cur_preds, 'truths': cur_truths, 'prob':object_prob, 'roi_id':cur_roi_id}
+        
+        if cur_key in results.keys():
+            results[cur_key].append(cur_result_object)
+        else:
+            results[cur_key] = [cur_result_object]
+
+    segments = results.keys()
+    segments.sort()
+
+    print('Analyzing segments')
+    output_strings = []
+    for segment in tqdm(segments):
+        cur_results = results[segment]
+
+        nms_results = non_max_suppression(cur_results)
+        
+        cur_video_id, cur_timestamp = segment.split('.')
+
+        for res in nms_results:
+            cur_box = res['box']
+            cur_preds = res['preds']
+            object_prob = res['prob']
+
+
+
+
+            for cc in range(dataset_ava.NUM_CLASSES):
+                #cur_probability = cur_preds[cc] * object_prob
+                cur_probability = cur_preds[cc]
+                # cur_probability = cur_truths[cc] # what if we have every label correct
+
+                cur_action_id = dataset_ava.TRAIN2ANN[str(cc)]['ann_id'] # this is string
+                if cur_probability < 0.001:
+                # if cur_probability < 0.005:
+                # if cur_probability < 0.01:
+                    continue
+                else:
+                    current_string = ''
+                    current_string += '%s,' % cur_video_id
+                    current_string += '%s,' % cur_timestamp
+                    current_string += '%.3f,%.3f,%.3f,%.3f,' % tuple(cur_box)
+                    current_string += '%s,' % cur_action_id
+                    current_string += '%.3f'% cur_probability
+                    output_strings.append(current_string)
+
+    return output_strings
+
+
+
+
 def convert_results(all_results, split='val'):
     '''
     all_results is a list where each
@@ -252,16 +324,33 @@ def non_max_suppression(result_list):
     # result list is a list of dicts for that particular action and video
     IoU_th = 0.5 # any IoU above is filtered out
     probs = np.array([result['prob'] for result in result_list])
-    boxes = np.array([result['box'] for result in result_list])
+    #boxes = np.array([result['box'] for result in result_list])
 
+    #sorted_indices = np.argsort(probs)[::-1] # larger to smaller
+    #sorted_probs = probs[sorted_indices]
+    #sorted_boxes = boxes[sorted_indices, :]
+
+    #picks = []
+    #for ii in range(sorted_probs.shape[0]):
+    #    cur_prob = sorted_probs[ii]
+    #    cur_box = sorted_boxes[ii]
+
+    #    max_IoU = 0.0
+    #    for pp in range(len(picks)):
+    #        pick_box = picks[pp]['box']
+    #        IoU = dataset_ava.IoU_box(cur_box, pick_box)
+    #        if IoU > max_IoU: max_IoU = IoU
+
+    #    if max_IoU < IoU_th:
+    #        picks.append({'box':cur_box, 'prob':cur_prob})
+    
+    # better way of doing this
     sorted_indices = np.argsort(probs)[::-1] # larger to smaller
-    sorted_probs = probs[sorted_indices]
-    sorted_boxes = boxes[sorted_indices, :]
-
     picks = []
-    for ii in range(sorted_probs.shape[0]):
-        cur_prob = sorted_probs[ii]
-        cur_box = sorted_boxes[ii]
+    for idx in sorted_indices:
+        cur_result = result_list[idx]
+        cur_prob = cur_result['prob']
+        cur_box = cur_result['box']
 
         max_IoU = 0.0
         for pp in range(len(picks)):
@@ -270,7 +359,7 @@ def non_max_suppression(result_list):
             if IoU > max_IoU: max_IoU = IoU
 
         if max_IoU < IoU_th:
-            picks.append({'box':cur_box, 'prob':cur_prob})
+            picks.append(cur_result)
 
     return picks
             
@@ -302,8 +391,30 @@ def read_and_convert_results(results_path, output_path):
        fp.write('\n'.join(filtered_strings))
     print('Output file %s is written' % output_path)
 
+def read_and_convert_per_roi_nms(results_path, output_path):
 
+    print('Reading %s' %results_path)
+    # results_path = RESULTS_PATH
+    results = read_serialized_results(results_path)
+    # results = results[:1000] # debug
+    output_strings = convert_results_per_box_nms(results,SPLIT)
+    
+    print('%.i samples' % len(output_strings))
 
+    with open(output_path, 'w') as fp:
+         fp.write('\n'.join(output_strings))
+    print('Output file %s is written' % output_path)
+    
+    #print('Filtering results with NMS')
+    ## print('%.i samples before filtering' % len(output_strings))
+    #filtered_strings = filter_results_nms(output_strings)
+    #print('%.i samples after filtering' % len(filtered_strings))
+
+    # ### import pdb;pdb.set_trace()
+
+    #with open(output_path, 'w') as fp:
+    #   fp.write('\n'.join(filtered_strings))
+    #print('Output file %s is written' % output_path)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -315,6 +426,7 @@ def main():
     results_path = RESULTS_FOLDER + '%s.txt' % result_name
     output_path = OUTPUT_FOLDER + '%s.csv' % result_name
     read_and_convert_results(results_path, output_path)
+    #read_and_convert_per_roi_nms(results_path, output_path)
 
     # read_and_convert_results(RESULTS_PATH, OUTPUT_PATH)
 
