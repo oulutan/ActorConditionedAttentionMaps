@@ -61,7 +61,7 @@ BOX_CROP_SIZE = [10, 10]
 # BOX_CROP_SIZE = [7, 7]
 
 TRAIN_FULL_MODEL = True
-# TRAIN_FULL_MODEL = False
+#TRAIN_FULL_MODEL = False
 
 ONLY_INIT_I3D = False
 
@@ -510,15 +510,15 @@ class Model_Trainer():
             fl_input_labels = tf.cast(input_labels, tf.float32)
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
             # pred_probs = tf.nn.softmax(logits)
+            if self.dataset_str == 'jhmdb':
+                pred_probs = tf.nn.softmax(logits)
+                logging.info("Optimizing on Softmax Loss")
+                softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
+                                                                logits=logits)
+                per_roi_loss = softmax_loss
+            else:
+            #if True:
             # In our case each logit is a probability itself
-            #if self.dataset_str == 'jhmdb':
-            #    pred_probs = tf.nn.softmax(logits)
-            #    logging.info("Optimizing on Softmax Loss")
-            #    softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
-            #                                                    logits=logits)
-            #    per_roi_loss = softmax_loss
-            #else:
-            if True:
                 pred_probs = tf.nn.sigmoid(logits)
                 logging.info("Optimizing on Sigmoid X-Entropy loss! ")
                 sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
@@ -631,7 +631,10 @@ class Model_Trainer():
         regularizers = sum(tf.nn.l2_loss(var) for var in vars_to_reg)
 
         # regu_constant = 1e-6
-        regu_constant = 1e-7
+        if self.dataset_str == "ava":
+            regu_constant = 1e-7
+        elif self.dataset_str == "jhmdb":
+            regu_constant = 1e-6
         # regu_constant = 1e-8
         # regu_constant = 0.
         regularizers = regu_constant * regularizers
@@ -1165,6 +1168,7 @@ def custom_loader(sess, ckpt_file):
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
         if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "Adam" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')

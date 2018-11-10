@@ -25,7 +25,7 @@ INPUT_T = 32
  
 KEY_FRAME_INDEX = 2
  
-NUM_CLASSES = 21
+NUM_CLASSES = 21 + 1 # 1 for background
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 
@@ -74,7 +74,8 @@ ACT_STR_TO_NO = {
     'swing_baseball':17,
     'throw':18,
     'walk':19,
-    'wave':20
+    'wave':20,
+    'background': 21
 }
 
 ACT_NO_TO_STR = {ACT_STR_TO_NO[strkey]:strkey for strkey in ACT_STR_TO_NO.keys()} 
@@ -120,7 +121,7 @@ def get_val_list():
         for v in vids_info:
             vidname, train_test = v.split(" ")
             if train_test == '2':
-                for ii in range(ANNOTATIONS[vidname]['nframes']):
+                for ii in range(8, ANNOTATIONS[vidname]['nframes'] - 8):
                     vid_str = "%s %i" % (vidname, ii)
                     val_vids.append(vid_str)
 
@@ -141,7 +142,7 @@ def get_video_frames(segment_key, split):
     action = ANNOTATIONS[vidname]['action']
     if split == 'train':
         # if its train frame info is total number of frames in the segments
-        center_frame = np.random.randint(low=0, high=int(frame_info))
+        center_frame = np.random.randint(low=8, high=int(frame_info)-8)
     else:
         center_frame = int(frame_info)
     
@@ -244,10 +245,10 @@ def match_annos_with_detections(annotations, detections, action):
             # # feature map index, upper left, bottom right coordinates
             rois_np[dd,:] = [top, left, bottom, right]
             if cur_max_iou < MATCHING_IOU:
-                continue
-            matched_ann = annotations[index_for_each_det[dd]]
-            
-            labels_np[dd, ACT_STR_TO_NO[action]] = 1
+                labels_np[dd, -1] = 1 # bg class for softmax
+            else:
+            #matched_ann = annotations[index_for_each_det[dd]]
+                labels_np[dd, ACT_STR_TO_NO[action]] = 1
 
  
     return labels_np, rois_np, no_det
