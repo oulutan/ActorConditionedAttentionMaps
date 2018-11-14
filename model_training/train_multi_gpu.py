@@ -229,10 +229,23 @@ class Model_Trainer():
             split = 'test'
         
         ## DEBUGGING
-        #val_detection_segments = ['1j20qq1JyX4.1108']
+        # val_detection_segments = ['1j20qq1JyX4.1108']
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Ov0za6Xb1LM')]
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18')]
-        #val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.11')]
+        val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18.091')] # 3 people scene talking
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.11')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('55Ihr6uVIDA.092')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('9F2voT6QWvQ.102')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Di1MG6auDYo.13')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Di1MG6auDYo.107')]
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('uNT6HrrnqPU.172')] # Kiss
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('IzvOYVMltkI.163')] # Ride
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Di1MG6auDYo.142')] # Read
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('CMCPhm2L400.113')] # Run
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('er7eeiJB6dI.135')] # Bend
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('_eBah6c5kyA.118')] # Sleep
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Hscyg0vLKc8.104')] # Fight
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('9Y_l9NsnYE0.133')] # Listen
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('rXFlJbXyZyc.154')] # Talk
         ## DEBUGGING
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
@@ -272,6 +285,7 @@ class Model_Trainer():
         rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
         no_dets.set_shape([None])
         segment_keys.set_shape([None])
+        
 
         self.input_batch = input_batch
         self.labels =labels
@@ -867,6 +881,7 @@ class Model_Trainer():
             run_dict['attention_map'] = tf.get_collection('attention_map')[0]
             run_dict['feature_activations'] = tf.get_collection('feature_activations')[0]
             run_dict['final_i3d_feats'] = tf.get_collection('final_i3d_feats')[0]
+            run_dict['cls_weights'] = [var for var in tf.global_variables() if var.name == "CLS_Logits/kernel:0"][0]
             run_dict['input_batch'] = self.input_batch
             run_dict['rois'] = self.rois
 
@@ -952,11 +967,22 @@ class Model_Trainer():
                 roi_probs = out_dict['pred_probs']
                 for nnn in range(out_dict['no_dets'][0]):
                     print('\n')
+                    print( ', '.join(out_dict['segment_keys']))
                     print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
                            get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
-                    img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
+                    print("Labels: " + ",".join([dataset_ava.TRAIN2ANN[str(ccc)]['class_str'] for ccc in range(60) if out_dict['roi_labels'][nnn][ccc]==1]))
+                    #img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
                     #img = generate_attention_visualization(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
                     #img = generate_attention_visualization(out_dict['attention_map'], out_dict['final_i3d_feats'], out_dict['input_batch'], out_dict['rois'], nnn)
+                    img = generate_class_activation_maps(out_dict['final_i3d_feats'], out_dict['cls_weights'], out_dict['input_batch'], out_dict['rois'], out_dict['pred_probs'], nnn)
+
+                    cv2.imshow('Maps', img)
+                    k = cv2.waitKey(0)
+                    cv2.destroyWindow('Maps')
+                    if k == ord("n"):
+                        break
+
+                    # import pdb;pdb.set_trace()
 
 
             # Trace the timeline for debugging performance
@@ -1213,16 +1239,16 @@ def generate_topk_variance_attention_maps(attention_map, feature_activations, in
     time_index = 4
     mask = np.float32(feature_activations != 0.)
     #masked_attention = attention_map * feature_activations
-    #masked_attention = attention_map * mask
-    masked_attention = feature_activations
+    masked_attention = attention_map * mask
+    #masked_attention = feature_activations
     #masked_attention = mask
     #masked_attention = attention_map
-    #var_list = np.argsort(np.var(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
+    var_list = np.argsort(np.var(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
     #var_list = np.argsort(np.sum(np.reshape(masked_attention[roi_index][time_index], [-1,832]), axis=0))[::-1]
-    reshaped = np.reshape(masked_attention[roi_index][time_index], [-1,832])
-    total_n = np.sum(np.reshape(mask, [-1, 832]))
-    mean_val = np.sum(reshaped, axis=0) / total_n
-    var_list = np.argsort(np.sum((reshaped - mean_val)**2, axis=0) / total_n)[::-1]
+    #reshaped = np.reshape(masked_attention[roi_index][time_index], [-1,832])
+    #total_n = np.sum(np.reshape(mask, [-1, 832]))
+    #mean_val = np.sum(reshaped, axis=0) / total_n
+    #var_list = np.argsort(np.sum((reshaped - mean_val)**2, axis=0) / total_n)[::-1]
     #var_list = [0, 100, 200, 300, 400, 500, 600, 700, 800, 50, 150, 250, 350, 450]
 
     top, left, bottom, right = rois[0, roi_index]
@@ -1238,17 +1264,20 @@ def generate_topk_variance_attention_maps(attention_map, feature_activations, in
         cur_index = var_list[ii]
         cur_attn_map = attention_map[roi_index][time_index][:,:,cur_index] * mask[roi_index][time_index][:,:,cur_index]
         rsz_attn_map = cv2.resize(cur_attn_map, (400,400), interpolation=0)
-        max_val = np.max(rsz_attn_map)
-        normalized_image = np.uint8(rsz_attn_map / max_val * 255.)
+        
+        min_val = np.min(attention_map[:,time_index, :, :, :])
+        max_val = np.max(attention_map[:,time_index, :, :, :] - min_val)
+        normalized_image = np.uint8((rsz_attn_map-min_val) / max_val * 255.)
+
         colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
         overlay = input_frame.copy()
         overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
         img_to_show = np.concatenate([img_to_show, overlay], axis=1)
 
-    cv2.imshow('Maps', img_to_show)
-    cv2.waitKey(0)
+    #cv2.imshow('Maps', img_to_show)
+    #cv2.waitKey(0)
     # import pdb;pdb.set_trace()
-    cv2.destroyWindow('Maps')
+    #cv2.destroyWindow('Maps')
     return img_to_show
 
 def generate_attention_visualization(attention_map, feature_activations, input_batch, rois, roi_index):
@@ -1260,7 +1289,7 @@ def generate_attention_visualization(attention_map, feature_activations, input_b
     #masked_attention = attention_map * mask
     #masked_attention = feature_activations
     #masked_attention = mask
-    masked_attention = attention_map * mask
+    #masked_attention = attention_map * mask
     #masked_attention = masked_attention[roi_index,time_index]
     average_map = np.sum(masked_attention, axis=-1)
     #average_map = np.sum(mask, axis=-1)
@@ -1308,10 +1337,79 @@ def generate_attention_visualization(attention_map, feature_activations, input_b
     #     overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
     #     img_to_show = np.concatenate([img_to_show, overlay], axis=1)
 
-    cv2.imshow('Maps', img_to_show)
-    cv2.waitKey(0)
+    #cv2.imshow('Maps', img_to_show)
+    #cv2.waitKey(0)
     # import pdb;pdb.set_trace()
-    cv2.destroyWindow('Maps')
+    #cv2.destroyWindow('Maps')
+    return img_to_show
+
+def generate_class_activation_maps(feature_activations, cls_weights, input_batch, rois, pred_probs, roi_index):
+    time_index = 4
+    # feat_time_index = feature_activations.shape[1]//2
+    feat_time_index = 0
+    mask = np.float32(feature_activations != 0.)
+
+    class_maps = np.matmul(feature_activations, cls_weights)
+
+    top, left, bottom, right = rois[0, roi_index]
+    input_frame = np.uint8(input_batch[0, 16])[:,:,::-1]
+    img_to_show = input_frame.copy()
+    H,W,C = img_to_show.shape
+    left = int(W * left)
+    right = int(W * right)
+    top = int(H * top)
+    bottom = int(H * bottom)
+    cv2.rectangle(img_to_show, (left,top), (right,bottom), (0,255,0), 2)
+
+    # add the average_map
+    #avg_map = average_map[roi_index, time_index]
+    #if roi_index == 0:
+    #    avg_map = average_map[0,4,:] - average_map[1,4,:]
+    #elif roi_index == 1:
+    #    avg_map = average_map[1,4,:] - average_map[0,4,:]
+    #else:
+    #    avg_map = average_map[roi_index, 4, :]
+    #print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
+    #       get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
+
+    # visualize highest cams
+    #action_classes = [cc for cc in range(dataset_ava.NUM_CLASSES) if pred_probs[roi_index, cc] > 0.1]
+
+    # visualize specific cams
+    class_list = ["sit", "stand", 'touch', 'listen to', 'talk']
+    #class_list = ["stand", "walk", "carry", "watch (a"]
+    #class_list = ["talk", "listen to"]
+    action_classes = [cc for cc in range(dataset_ava.NUM_CLASSES) if any([cname in dataset_ava.TRAIN2ANN[str(cc)]['class_str'] for cname in class_list])]
+    for ii in action_classes:
+        #avg_map = class_maps[roi_index, feat_time_index, :, :, ii]
+        act_map = class_maps[roi_index, :, :, :, ii]
+        avg_map = np.max(act_map, axis=0)
+        rsz_avg_map = cv2.resize(avg_map, (400,400), interpolation=0)
+        min_val = np.min(class_maps[:,:, :, :, :])
+        max_val = np.max(class_maps[:,:, :, :, :] - min_val)
+        normalized_image = np.uint8((rsz_avg_map-min_val) / max_val * 255.)
+        colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
+        overlay = input_frame.copy()
+        overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
+        img_to_show = np.concatenate([img_to_show, overlay], axis=1)
+        print((dataset_ava.TRAIN2ANN[str(ii)]['class_str'], get_3_decimal_float(pred_probs[roi_index][ii])))
+
+
+    # for ii in range(k):
+    #     cur_index = var_list[ii]
+    #     cur_attn_map = attention_map[roi_index][time_index][:,:,cur_index] * mask[roi_index][time_index][:,:,cur_index]
+    #     rsz_attn_map = cv2.resize(cur_attn_map, (400,400), interpolation=0)
+    #     max_val = np.max(rsz_attn_map)
+    #     normalized_image = np.uint8(rsz_attn_map / max_val * 255.)
+    #     colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
+    #     overlay = input_frame.copy()
+    #     overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
+    #     img_to_show = np.concatenate([img_to_show, overlay], axis=1)
+
+    #cv2.imshow('Maps', img_to_show)
+    #cv2.waitKey(0)
+    # import pdb;pdb.set_trace()
+    #cv2.destroyWindow('Maps')
     return img_to_show
 
 if __name__ == '__main__':

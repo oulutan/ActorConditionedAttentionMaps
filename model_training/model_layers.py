@@ -21,6 +21,8 @@ def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx,
         class_feats =  non_local_ROI_feat_attention_model(box_features, features, cur_b_idx)
     elif  architecture_str == 'soft_attn':
         class_feats =  soft_roi_attention_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+    elif  architecture_str == 'acrn_roi':
+        class_feats =  acrn_roi_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
     elif  architecture_str == 'single_attn':
         class_feats =  single_soft_roi_attention_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
     elif  architecture_str == 'non_local_v2':
@@ -273,6 +275,60 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
     # class_feats = tf.layers.flatten(avg_features)
 
     # return class_feats
+
+def acrn_roi_model(context_features, shifted_rois, cur_b_idx, is_training):
+    with tf.variable_scope('Soft_Attention_Model'):
+        _, Tc, Hc, Wc, Cc = context_features.shape.as_list()
+        B = tf.shape(context_features)[0]
+        feature_map_channel = Cc / 4
+
+        roi_box_features = temporal_roi_cropping(context_features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+        R = tf.shape(shifted_rois)[0]
+
+        flat_box_feats = basic_model(roi_box_features)
+        roi_embedding = tf.layers.dense(flat_box_feats, 
+                                        feature_map_channel, 
+                                        activation=tf.nn.relu,
+                                        kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                        name='RoiEmbedding')
+
+        context_embedding = tf.layers.conv3d(context_features, 
+                                            filters=feature_map_channel, 
+                                            kernel_size=[1,1,1], 
+                                            padding='SAME', 
+                                            activation=tf.nn.relu, 
+                                            name='ContextEmbedding')
+        
+        # with tf.device('/cpu:0'):
+        roi_expanded = tf.expand_dims(tf.expand_dims(tf.expand_dims(roi_embedding, axis=1), axis=1), axis=1) # R,512 -> R,1,1,1,512
+        roi_tiled = tf.tile(roi_expanded, [1,Tc,Hc,Wc,1], 'RoiTiling')
+
+        # multiply context_feats by no of rois so we can concatenate
+        context_embedding_gathered = tf.gather(context_embedding, cur_b_idx, axis=0, name='ContextEmbGather')
+
+        roi_context_feats = tf.concat([roi_tiled, context_embedding_gathered], 4, name='RoiContextConcat')
+
+        relation_feats = tf.layers.conv3d(  roi_context_feats, 
+                                            filters=Cc, 
+                                            kernel_size=[1,1,1], 
+                                            padding='SAME', 
+                                            activation=tf.nn.relu, 
+                                            name='RelationFeats')
+        
+        #attention_map = tf.nn.sigmoid(relation_feats,'AttentionMap') # use sigmoid so it represents a heatmap of attention
+        # heatmap of attention
+        
+        # with tf.device('/cpu:0'):
+        # Multiply attention map with context features. Now this new feature represents the roi
+        #gathered_context = tf.gather(relation_feats, cur_b_idx, axis=0, name='ContextGather')
+        tf.add_to_collection('feature_activations', relation_feats) # for attn map generation
+        #soft_attention_feats = tf.multiply(attention_map, gathered_context)
+    
+
+    class_feats = i3d_tail_model(relation_feats, is_training)
+    return class_feats
+
+
 
 def single_soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_training):
     with tf.variable_scope('Soft_Attention_Model'):
