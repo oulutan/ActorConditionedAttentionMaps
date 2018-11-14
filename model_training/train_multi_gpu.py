@@ -239,7 +239,7 @@ class Model_Trainer():
         ## DEBUGGING
         # val_detection_segments = ['1j20qq1JyX4.1108']
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Ov0za6Xb1LM')]
-        val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18.091')] # 3 people scene talking
+        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18.091')] # 3 people scene talking
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.11')]
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('55Ihr6uVIDA.092')]
         # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('9F2voT6QWvQ.102')]
