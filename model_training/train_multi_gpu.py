@@ -59,9 +59,10 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [14, 14]
 BOX_CROP_SIZE = [10, 10]
 # BOX_CROP_SIZE = [7, 7]
+USE_TFRECORD = True
 
 TRAIN_FULL_MODEL = True
-# TRAIN_FULL_MODEL = False
+#TRAIN_FULL_MODEL = False
 
 ONLY_INIT_I3D = False
 
@@ -202,13 +203,20 @@ class Model_Trainer():
         np.random.shuffle(train_detection_segments)
 
 
-        dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
-        dataset = dataset.repeat()# repeat infinitely
+        if not USE_TFRECORD:
+            dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(lambda seg_key, c_split: 
+                    tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+        else:
+            tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments, 'train')
+            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(dataset_ava.get_tfrecord_train, 
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # repeat infinitely and shuffle with seed
         # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
-        dataset = dataset.map(lambda seg_key, c_split: 
-                tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensors(x).repeat(2))
         # dataset = dataset.shuffle(BATCH_SIZE * self.no_gpus * 4)
         # import pdb;pdb.set_trace()
@@ -257,15 +265,26 @@ class Model_Trainer():
             np.random.seed(10)
             np.random.shuffle(val_detection_segments)
 
-        dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
-        dataset = dataset.map(lambda seg_key, c_split: 
-                tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+        if not USE_TFRECORD:
+            dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(lambda seg_key, c_split: 
+                    tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+        else:
+            tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'val')
+            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(dataset_ava.get_tfrecord_val, 
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         self.validation_dataset = dataset
         self.val_detection_segments = val_detection_segments
+
+        # skip validation
+        # self.val_detection_segments = val_detection_segments[:200]
         
 
 
@@ -524,15 +543,15 @@ class Model_Trainer():
             fl_input_labels = tf.cast(input_labels, tf.float32)
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
             # pred_probs = tf.nn.softmax(logits)
+            if self.dataset_str == 'jhmdb':
+                pred_probs = tf.nn.softmax(logits)
+                logging.info("Optimizing on Softmax Loss")
+                softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
+                                                                logits=logits)
+                per_roi_loss = softmax_loss
+            else:
+            #if True:
             # In our case each logit is a probability itself
-            #if self.dataset_str == 'jhmdb':
-            #    pred_probs = tf.nn.softmax(logits)
-            #    logging.info("Optimizing on Softmax Loss")
-            #    softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
-            #                                                    logits=logits)
-            #    per_roi_loss = softmax_loss
-            #else:
-            if True:
                 pred_probs = tf.nn.sigmoid(logits)
                 logging.info("Optimizing on Sigmoid X-Entropy loss! ")
                 sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
@@ -645,7 +664,10 @@ class Model_Trainer():
         regularizers = sum(tf.nn.l2_loss(var) for var in vars_to_reg)
 
         # regu_constant = 1e-6
-        regu_constant = 1e-7
+        if self.dataset_str == "ava":
+            regu_constant = 1e-7
+        elif self.dataset_str == "jhmdb":
+            regu_constant = 1e-6
         # regu_constant = 1e-8
         # regu_constant = 0.
         regularizers = regu_constant * regularizers
@@ -1197,8 +1219,8 @@ def custom_loader(sess, ckpt_file):
     var_map = {}
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
-        #if "CLS_Logits" not in variable.name: # for jhmdb
-        if "Adam" not in variable.name: # for jhmdb
+        if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "Adam" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')

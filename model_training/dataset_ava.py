@@ -33,6 +33,7 @@ ACAM_FOLDER = os.environ['ACAM_DIR']
 
 AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
 SEGMENTS_FOLDER = AVA_FOLDER + '/segments/'
+TFRECORDS_FOLDER = AVA_FOLDER + '/tfrecords/'
 DATA_FOLDER = AVA_FOLDER + '/data/'
 
 # AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
@@ -47,7 +48,7 @@ MAX_ROIS = 100
 
 USE_GROUND_TRUTH_BOXES = False
 
-MAX_ROIS_IN_TRAINING = 10
+MAX_ROIS_IN_TRAINING = 15
  
 # USE_TRACKER_TEMPORAL_ROIS = False
  
@@ -100,13 +101,113 @@ def get_test_list():
         test_detection_segments = json.load(fp)
     return test_detection_segments
 
+ 
+
 # Python Functions
 def get_data(segment_key, split):
  
     sample = get_video_frames(segment_key,split)
     labels_np, rois_np, no_det = get_labels(segment_key,split)
+    ## DEBUGGING
+    #sample = DEBUG_SAMPLE
+    #sample = get_video_frames(DEBUG_SEGMENT,'train')
+    #labels_np, rois_np, no_det = get_labels(DEBUG_SEGMENT,'train')
+    #labels_np, rois_np, no_det = LABELS_NP, ROIS_NP, NO_DET 
  
     return sample, labels_np, rois_np, no_det, segment_key
+
+
+import tensorflow as tf
+def get_tfrecord_train(serialized_example):
+    split = 'train'
+    
+    # Prepare feature list; read encoded JPG images as bytes
+    features = dict()
+    #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+    features["frames"] = tf.VarLenFeature(tf.string)
+    features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+    #features["filename"] = tf.FixedLenFeature((), tf.string)
+    features['movie'] = tf.FixedLenFeature((), tf.string)
+    features['segment'] = tf.FixedLenFeature((), tf.string)
+
+    
+    # Parse into tensors
+    parsed_features = tf.parse_single_example(serialized_example, features)
+    
+    # Randomly sample offset from the valid range.
+    #random_offset = tf.random_uniform(
+    #    shape=(), minval=0,
+    #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+    
+    #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+    
+    # Decode the encoded JPG images
+    #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+    sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+    sample = tf.cast(sample, tf.float32)
+    
+    #label  = tf.cast(parsed_features["class_label"], tf.int64)
+    #label = parsed_features['filename']
+    labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+    
+    
+    return sample, labels_np, rois_np, no_det, segment_key
+
+def get_tfrecord_val(serialized_example):
+    split = 'val'
+    
+    # Prepare feature list; read encoded JPG images as bytes
+    features = dict()
+    #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+    features["frames"] = tf.VarLenFeature(tf.string)
+    features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+    #features["filename"] = tf.FixedLenFeature((), tf.string)
+    features['movie'] = tf.FixedLenFeature((), tf.string)
+    features['segment'] = tf.FixedLenFeature((), tf.string)
+
+    
+    # Parse into tensors
+    parsed_features = tf.parse_single_example(serialized_example, features)
+    
+    # Randomly sample offset from the valid range.
+    #random_offset = tf.random_uniform(
+    #    shape=(), minval=0,
+    #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+    
+    #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+    
+    # Decode the encoded JPG images
+    #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+    sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+    sample = tf.cast(sample, tf.float32)
+    
+    #label  = tf.cast(parsed_features["class_label"], tf.int64)
+    #label = parsed_features['filename']
+    labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+    
+    
+    return sample, labels_np, rois_np, no_det, segment_key
+
+def get_labels_wrapper(movie, segment, split):
+    segment_key = "%s.%s" % (movie, segment)
+    labels_np, rois_np, no_det = get_labels(segment_key,split)
+    return labels_np, rois_np, no_det, segment_key
+
+def generate_tfrecord_list(detection_segments, split):
+    #train_path = "/home/ulutan/work/train_tfrecords/"
+    #val_path = "/data/ulutan/AVA/tfrecords/val_tfrecords/"
+    #records_path = train_path if split == 'train' else val_path
+    records_path = os.path.join(TFRECORDS_FOLDER, split)
+
+    tfrecord_list = []
+    for segment_key in detection_segments:
+        movie, segment = segment_key.split(".")
+        t_path = os.path.join(records_path, movie, "%s.tfrecord" % segment)
+        tfrecord_list.append(t_path)
+
+    return tfrecord_list
+
+
  
 # def get_video_frames(segment_key, split):
 #     # Uses opencv, stupid opencv wont build with video support on the server
@@ -451,6 +552,10 @@ def _exception_wrapper(segment_key):
         print('Error with %s' % segment_key)
         # import pdb;pdb.set_trace()
          
+# debug with single datapoint
+#DEBUG_SEGMENT = "0f39OWEqJ24.0902"
+#DEBUG_SAMPLE = get_video_frames(DEBUG_SEGMENT,"train")
+#LABELS_NP, ROIS_NP, NO_DET = get_labels(DEBUG_SEGMENT,"train")
  
 if __name__ == '__main__':
     import os
