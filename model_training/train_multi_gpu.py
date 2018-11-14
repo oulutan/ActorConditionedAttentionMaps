@@ -59,6 +59,7 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [14, 14]
 BOX_CROP_SIZE = [10, 10]
 # BOX_CROP_SIZE = [7, 7]
+USE_TFRECORD = True
 
 TRAIN_FULL_MODEL = True
 # TRAIN_FULL_MODEL = False
@@ -202,13 +203,20 @@ class Model_Trainer():
         np.random.shuffle(train_detection_segments)
 
 
-        dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
-        dataset = dataset.repeat()# repeat infinitely
+        if not USE_TFRECORD:
+            dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(lambda seg_key, c_split: 
+                    tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+        else:
+            tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments, 'train')
+            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(dataset_ava.get_tfrecord_train, 
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # repeat infinitely and shuffle with seed
         # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
-        dataset = dataset.map(lambda seg_key, c_split: 
-                tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensors(x).repeat(2))
         # dataset = dataset.shuffle(BATCH_SIZE * self.no_gpus * 4)
         # import pdb;pdb.set_trace()
@@ -244,15 +252,26 @@ class Model_Trainer():
             np.random.seed(10)
             np.random.shuffle(val_detection_segments)
 
-        dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
-        dataset = dataset.map(lambda seg_key, c_split: 
-                tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+        if not USE_TFRECORD:
+            dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(lambda seg_key, c_split: 
+                    tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+        else:
+            tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'val')
+            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(dataset_ava.get_tfrecord_val, 
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         self.validation_dataset = dataset
         self.val_detection_segments = val_detection_segments
+
+        # skip validation
+        # self.val_detection_segments = val_detection_segments[:200]
         
 
 
