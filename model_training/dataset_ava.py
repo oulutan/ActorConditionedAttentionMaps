@@ -144,7 +144,7 @@ def get_tfrecord_train(serialized_example):
     # Decode the encoded JPG images
     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
-    sample = tf.cast(sample, tf.float32)
+    sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
     
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
@@ -179,7 +179,7 @@ def get_tfrecord_val(serialized_example):
     # Decode the encoded JPG images
     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
-    sample = tf.cast(sample, tf.float32)
+    sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
     
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
