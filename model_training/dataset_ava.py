@@ -89,7 +89,22 @@ def get_train_list():
     # with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
     with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
         train_detection_segments = json.load(fp)
+
     return train_detection_segments
+    # detected_set = set(train_detection_segments)
+    # # if we want to focus on some classes
+    # with open(DATA_FOLDER + 'action_lists_train.json') as fp:
+    #     act_list = json.load(fp)
+    # filtered_segments = []
+    # for ii in range(15,64):
+    #     if str(ii) in act_list.keys():
+    #         class_vids = act_list[str(ii)]
+    #         for vid in class_vids:
+    #             vid_id = vid[0]
+    #             if vid_id in detected_set:
+    #                 filtered_segments.append(vid_id)
+    # return filtered_segments
+
  
 def get_val_list():
     with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
@@ -155,6 +170,41 @@ def get_tfrecord_train(serialized_example):
 
 def get_tfrecord_val(serialized_example):
     split = 'val'
+    
+    # Prepare feature list; read encoded JPG images as bytes
+    features = dict()
+    #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+    features["frames"] = tf.VarLenFeature(tf.string)
+    features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+    #features["filename"] = tf.FixedLenFeature((), tf.string)
+    features['movie'] = tf.FixedLenFeature((), tf.string)
+    features['segment'] = tf.FixedLenFeature((), tf.string)
+
+    
+    # Parse into tensors
+    parsed_features = tf.parse_single_example(serialized_example, features)
+    
+    # Randomly sample offset from the valid range.
+    #random_offset = tf.random_uniform(
+    #    shape=(), minval=0,
+    #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+    
+    #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+    
+    # Decode the encoded JPG images
+    #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+    sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+    sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+    
+    #label  = tf.cast(parsed_features["class_label"], tf.int64)
+    #label = parsed_features['filename']
+    labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+    
+    
+    return sample, labels_np, rois_np, no_det, segment_key
+
+def get_tfrecord_test(serialized_example):
+    split = 'test'
     
     # Prepare feature list; read encoded JPG images as bytes
     features = dict()
