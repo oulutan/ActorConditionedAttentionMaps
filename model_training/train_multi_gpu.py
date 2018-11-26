@@ -223,6 +223,7 @@ class Model_Trainer():
         # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
         #                                 cycle_length=10, block_length=1)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        dataset = dataset.shuffle(self.batch_size * self.no_gpus * 20)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         self.training_dataset = dataset
@@ -261,7 +262,8 @@ class Model_Trainer():
         output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
 
         # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
-        if not self.evaluate:
+        #if not self.evaluate:
+        if True:
             np.random.seed(10)
             np.random.shuffle(val_detection_segments)
 
@@ -272,11 +274,18 @@ class Model_Trainer():
                     tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         else:
-            tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'val')
-            dataset = tf.data.TFRecordDataset(tfrecord_list)
-            dataset = dataset.repeat()# repeat infinitely
-            dataset = dataset.map(dataset_ava.get_tfrecord_val, 
-                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            if not self.run_test:
+                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'val')
+                dataset = tf.data.TFRecordDataset(tfrecord_list)
+                dataset = dataset.repeat()# repeat infinitely
+                dataset = dataset.map(dataset_ava.get_tfrecord_val, 
+                        num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            else:
+                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'test')
+                dataset = tf.data.TFRecordDataset(tfrecord_list)
+                dataset = dataset.repeat()# repeat infinitely
+                dataset = dataset.map(dataset_ava.get_tfrecord_test,
+                        num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
@@ -860,12 +869,13 @@ class Model_Trainer():
             # logging.info(report)
             if self.model_id: logging.info('Model id is: ' + self.model_id)
 
-            if self.evaluate:
+            if True: # self.evaluate:
                 ## process the final results and break
                 g_step = self.sess.run(self.global_step)
                 res_name = 'VALIDATION' + '_Results_'+ self.model_id +'_%.2i' % g_step
                 # process_ava_style_results(res_name)
                 self.dataset_fcn.process_evaluation_results(res_name)
+            if self.evaluate:
                 break
 
             else:
