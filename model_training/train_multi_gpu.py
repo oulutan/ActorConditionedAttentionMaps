@@ -830,9 +830,17 @@ class Model_Trainer():
     def run_training(self):
         val_losses = []
         tr_losses = []
-        self.current_learning_rate = self.base_learning_rate
+        # self.current_learning_rate = self.base_learning_rate
         ## Loop for epochs
         for ee in range(NUM_EPOCHS):
+            # self.current_learning_rate = self.base_learning_rate
+            ### Cosine learning rate
+            g_step = self.sess.run(self.global_step)
+            lr_max = 0.02
+            lr_min = 0.0001
+            reset_interval = 10
+            self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * g_step/reset_interval))
+            logging.info('Current learning rate is %f' % self.current_learning_rate)
             if not self.evaluate:
                 #### Training ####
                 tr_loss, step = self.run_epoch(training_flag=True, epoch_no=ee)
