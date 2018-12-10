@@ -570,6 +570,13 @@ class Model_Trainer():
                 sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
                                                                 logits=logits)
                 per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
+                #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
+                #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(62,63) if str(action) in dataset_ava.ANN2TRAIN.keys()]#work on computer
+                #logging.info('ONLY FOCUSING ON FOLLOWING CLASSES')
+                #logging.info([dataset_ava.TRAIN2ANN[(str(cc))]['class_str'] for cc in focus_on_classes])
+                #class_filter = np.zeros([60])
+                #class_filter[np.array(focus_on_classes)] = 1.
+                #per_roi_loss = tf.reduce_sum(sigmoid_loss*class_filter, axis=1) / tf.cast(tf.reduce_sum(class_filter), tf.float32)
             # loss_val = tf.reduce_mean(-tf.reduce_sum(tf.cast(input_labels, tf.float32) * tf.log(tf.clip_by_value(pred_probs, 1e-10, 1e10)), reduction_indices=[1]))
             pred_probs = tf.clip_by_value(pred_probs, 1e-5, 1.0 - 1e-5)
             # pred_probs = tf.Print(pred_probs, [pred_probs], 'pred_probs:')

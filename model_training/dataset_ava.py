@@ -91,25 +91,44 @@ def get_train_list():
         train_detection_segments = json.load(fp)
 
     return train_detection_segments
-    # detected_set = set(train_detection_segments)
-    # # if we want to focus on some classes
-    # with open(DATA_FOLDER + 'action_lists_train.json') as fp:
-    #     act_list = json.load(fp)
-    # filtered_segments = []
-    # for ii in range(15,64):
-    #     if str(ii) in act_list.keys():
-    #         class_vids = act_list[str(ii)]
-    #         for vid in class_vids:
-    #             vid_id = vid[0]
-    #             if vid_id in detected_set:
-    #                 filtered_segments.append(vid_id)
-    # return filtered_segments
+    #detected_set = set(train_detection_segments)
+    ## if we want to focus on some classes
+    #with open(DATA_FOLDER + 'action_lists_train.json') as fp:
+    #    act_list = json.load(fp)
+    #filtered_segments = []
+    ##for ii in range(15,64): # all objects
+    #for ii in range(62,63): # working on computer
+    #    if str(ii) in act_list.keys():
+    #        class_vids = act_list[str(ii)]
+    #        for vid in class_vids:
+    #            vid_id = vid[0]
+    #            if vid_id in detected_set:
+    #                filtered_segments.append(vid_id)
+    #filtered_segments = list(set(filtered_segments))
+    #filtered_segments.sort()
+    #return filtered_segments
 
  
 def get_val_list():
     with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
         val_detection_segments = json.load(fp)
     return val_detection_segments
+    #detected_set = set(val_detection_segments)
+    ## if we want to focus on some classes
+    #with open(DATA_FOLDER + 'action_lists_val.json') as fp:
+    #    act_list = json.load(fp)
+    #filtered_segments = []
+    ##for ii in range(15,64): # all objects
+    #for ii in range(62,63): # working on computer
+    #    if str(ii) in act_list.keys():
+    #        class_vids = act_list[str(ii)]
+    #        for vid in class_vids:
+    #            vid_id = vid[0]
+    #            if vid_id in detected_set:
+    #                filtered_segments.append(vid_id)
+    #filtered_segments = list(set(filtered_segments))
+    #filtered_segments.sort()
+    #return filtered_segments
 
 def get_test_list():
     with open(DATA_FOLDER + 'segment_keys_test_detections_only.json') as fp:
