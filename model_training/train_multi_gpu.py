@@ -28,7 +28,7 @@ import cv2
 
 DATE = time.strftime("%b-%d-time-%H-%M-%S") # Feb-10-time-7-36
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 40
 TRAINING_ITERS = 5000
 # TRAINING_ITERS = 1 # debug
 VALIDATION_ITERS = 5000 # not used while balanced_validation

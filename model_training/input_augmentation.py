@@ -30,7 +30,7 @@ def augment_input_sequences(cur_input_seq, cur_rois):
     top, left, bottom, right = cur_rois[:,0], cur_rois[:,1], cur_rois[:,2], cur_rois[:,3]
     B = tf.shape(cur_input_seq)[0]
 
-    offset_max = 0.20
+    offset_max = 0.30
     left_offset   = tf.random_uniform([], minval=-offset_max, maxval=offset_max)
     right_offset  = tf.random_uniform([], minval=-offset_max, maxval=offset_max)
     top_offset    = tf.random_uniform([], minval=-offset_max, maxval=offset_max)
