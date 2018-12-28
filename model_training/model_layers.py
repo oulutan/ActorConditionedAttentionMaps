@@ -20,7 +20,7 @@ def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx,
         box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         class_feats =  non_local_ROI_feat_attention_model(box_features, features, cur_b_idx)
     elif  architecture_str == 'soft_attn':
-        class_feats =  soft_roi_attention_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+        class_feats =  soft_roi_attention_model(features, shifted_rois, cur_b_idx, is_training)
     elif  architecture_str == 'acrn_roi':
         class_feats =  acrn_roi_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
     elif  architecture_str == 'single_attn':
@@ -223,6 +223,7 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
                                         activation=tf.nn.relu,
                                         kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
                                         name='RoiEmbedding')
+        roi_embedding = tf.layers.dropout(inputs=roi_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
 
         context_embedding = tf.layers.conv3d(context_features, 
                                             filters=feature_map_channel, 
@@ -230,6 +231,7 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
                                             padding='SAME', 
                                             activation=tf.nn.relu, 
                                             name='ContextEmbedding')
+        context_embedding =  tf.layers.dropout(inputs=context_embedding, rate=0.5, training=is_training, name='Context_Dropout')
         
         # with tf.device('/cpu:0'):
         roi_expanded = tf.expand_dims(tf.expand_dims(tf.expand_dims(roi_embedding, axis=1), axis=1), axis=1) # R,512 -> R,1,1,1,512
