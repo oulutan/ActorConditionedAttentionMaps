@@ -8,6 +8,7 @@ import os
 
 import numpy as np
 import json
+import pickle
 import cv2
 import imageio
 
@@ -383,6 +384,116 @@ def get_labels(segment_key,split):
     labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
      
     return labels_np, rois_np, no_det
+
+
+POSE_PARTS = {
+    1: "back",
+    2: "chest",
+    3: "l_hand",
+    4: "r_hand",
+    5: "l_foot",
+    6: "r_foot",
+    7: "r_ham",
+    8: "l_ham",
+    9: "r_quad",
+    10: "l_quad",
+    11: "r_calf", 
+    12: "l_calf",
+    13: "r_shin",
+    14: "l_shin",
+    15: "l_bicep",
+    16: "r_bicep",
+    17: "r_tricep",
+    18: "l_tricep",
+    19: "l_forearm",
+    20: "r_forearm",
+    21: "l_brachium",
+    22: "r_brachium",
+    23: "r_face",
+    24: "l_face"
+}
+POSE2NO = {v:p for p, v in POSE_PARTS.items()}
+
+def get_poses_and_detections(segment_key, split):
+    movie_key, timestamp = segment_key.split('.')
+
+    poses_folder = AVA_FOLDER + '/poses/' + split + '/'
+
+    poses_pkl_path = os.path.join(poses_folder, movie_key, "%s.pkl" % timestamp)
+
+    with open(poses_pkl_path) as fp:
+        data = pickle.load(fp)
+
+    # boxes are [left, top, right, bottom, probabilty]
+    # data['boxes'][1] and data['boxes_normalized']
+    # data['bodies'][1] has body parts [[3xHxW]]
+    # body parts[0,:,:] is a mask of body parts using POSE_PARTS integers
+
+    norm_boxes = data['boxes_normalized']
+    bodies = data['bodies'][1]
+
+    detections = []
+
+    # Body partitions
+    partitions = [ ['back','chest'], # torso
+                   ['r_face', 'l_face'], # head
+                   ['l_hand', 'l_bicep', 'l_tricep', 'l_brachium', 'l_forearm'], # left arm
+                   ['r_hand', 'r_bicep', 'l_tricep', 'r_brachium', 'r_forearm'], # right arm
+                   ['l_foot', 'l_ham', 'l_quad', 'l_shin', 'l_calf'], # left leg
+                   ['r_foot', 'r_ham', 'r_quad', 'r_shin', 'r_calf'] # right leg
+                 ]
+    assert len(partitions) == 24
+    superpartition_nos = []
+    for super_part in partitions:
+        superpartition_nos.append([POSE2NO[pose_str] for pose_str in super_part])
+        
+
+    for ii in range(len(norm_boxes)):
+        norm_box = norm_boxes[ii]
+        body_parts = bodies[ii][0,:,:] # 0 is the image2bodypart mapping
+        
+        left, top, right, bottom, probabilty = norm_box
+
+        bodypart_boxes = []
+        for superpartition in superpartition_nos:
+            tops = []
+            lefts = []
+            bottoms = []
+            rights = []
+            for part_no in in superpartition:
+                mask = body_parts == part_no # boolean mask for current body part
+                if np.any(mask):
+                    indices = np.nonzero(mask)
+                    tops.append(np.min(indices[0]))
+                    lefts.append(np.min(indices[1]))
+                    bottoms.append(np.max(indices[0]))
+                    rights.append(np.max(indices[1]))
+            if tops:
+                top = np.min(tops)
+                left = np.min(lefts)
+                bottom = np.max(bottoms)
+                right = np.max(rights)
+            else:
+                top = -1.
+                left = -1.
+                bottom = -1.
+                right = -1.
+            bodypart_boxes.append([top, left, bottom, right])
+        
+        detection = {"box":[top, left, bottom, right], 
+                     "class_str": "person",
+                     "score": probabilty, 
+                     "class_no": 1,
+                     "body_parts": bodypart_boxes}
+        detections.append(detection)
+
+    return detections
+        
+
+
+
+
+    
  
 def get_obj_detection_results(segment_key,split):
     # split = sample_info['split']
@@ -417,6 +528,7 @@ def get_obj_detection_results(segment_key,split):
     # detections[0]['width'] = W
     # detections[0]['frame_nos'] = results['frame_nos']
     return detections
+    # top, left, bottom, right = cur_detection['box']
     # detections = [{"box": [0.07, 0.006, 0.981, 0.317], "class_str": "person", "score": 0.979, "class_no": 1},
  
  
