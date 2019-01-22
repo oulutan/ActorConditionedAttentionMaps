@@ -460,7 +460,7 @@ def get_poses_and_detections(segment_key, split):
             lefts = []
             bottoms = []
             rights = []
-            for part_no in in superpartition:
+            for part_no in superpartition:
                 mask = body_parts == part_no # boolean mask for current body part
                 if np.any(mask):
                     indices = np.nonzero(mask)
