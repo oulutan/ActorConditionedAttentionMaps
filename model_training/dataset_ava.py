@@ -142,14 +142,14 @@ def get_test_list():
 def get_data(segment_key, split):
  
     sample = get_video_frames(segment_key,split)
-    labels_np, rois_np, no_det = get_labels(segment_key,split)
+    labels_np, rois_np, no_det, poses_np = get_labels(segment_key,split)
     ## DEBUGGING
     #sample = DEBUG_SAMPLE
     #sample = get_video_frames(DEBUG_SEGMENT,'train')
     #labels_np, rois_np, no_det = get_labels(DEBUG_SEGMENT,'train')
     #labels_np, rois_np, no_det = LABELS_NP, ROIS_NP, NO_DET 
  
-    return sample, labels_np, rois_np, no_det, segment_key
+    return sample, labels_np, rois_np, no_det, segment_key, poses_np
 
 
 import tensorflow as tf
@@ -183,10 +183,10 @@ def get_tfrecord_train(serialized_example):
     
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
-    labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+    labels_np, rois_np, no_det, segment_key, poses_np = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string, tf.float32])
     
     
-    return sample, labels_np, rois_np, no_det, segment_key
+    return sample, labels_np, rois_np, no_det, segment_key, poses_np
 
 def get_tfrecord_val(serialized_example):
     split = 'val'
@@ -218,10 +218,10 @@ def get_tfrecord_val(serialized_example):
     
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
-    labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+    labels_np, rois_np, no_det, segment_key, poses_np = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string, tf.float32])
     
     
-    return sample, labels_np, rois_np, no_det, segment_key
+    return sample, labels_np, rois_np, no_det, segment_key, poses_np
 
 def get_tfrecord_test(serialized_example):
     split = 'test'
@@ -253,15 +253,21 @@ def get_tfrecord_test(serialized_example):
     
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
-    labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+    labels_np, rois_np, no_det, segment_key, poses_np = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string, tf.float32])
     
     
-    return sample, labels_np, rois_np, no_det, segment_key
+    return sample, labels_np, rois_np, no_det, segment_key, poses_np
 
 def get_labels_wrapper(movie, segment, split):
     segment_key = "%s.%s" % (movie, segment)
-    labels_np, rois_np, no_det = get_labels(segment_key,split)
-    return labels_np, rois_np, no_det, segment_key
+    
+    # without poses
+    # labels_np, rois_np, no_det = get_labels(segment_key,split)
+    # return labels_np, rois_np, no_det, segment_key
+    
+    # poses
+    labels_np, rois_np, no_det, poses_np = get_labels(segment_key,split)
+    return labels_np, rois_np, no_det, segment_key, poses_np
 
 def generate_tfrecord_list(detection_segments, split):
     #train_path = "/home/ulutan/work/train_tfrecords/"
@@ -380,10 +386,13 @@ def get_labels(segment_key,split):
     #     keyframe_detections, rois_np, no_det = get_tracker_rois(segment_key,split, obj_detections)
     #     labels_np, _, _ = match_annos_with_detections(sample_annotations, keyframe_detections, split)
 
-    detections = get_obj_detection_results(segment_key,split)
-    labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
+    # detections = get_obj_detection_results(segment_key,split)
+    # labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
+
+    detections = get_poses_and_detections(segment_key,split)
+    labels_np, rois_np, no_det, poses_np = match_annos_with_detections(sample_annotations, detections, split)
      
-    return labels_np, rois_np, no_det
+    return labels_np, rois_np, no_det, poses_np
 
 
 POSE_PARTS = {
@@ -414,6 +423,17 @@ POSE_PARTS = {
 }
 POSE2NO = {v:p for p, v in POSE_PARTS.items()}
 
+# Body partitions
+PARTITIONS = [ ['back','chest'], # torso
+                ['r_face', 'l_face'], # head
+                ['l_hand', 'l_bicep', 'l_tricep', 'l_brachium', 'l_forearm'], # left arm
+                ['r_hand', 'r_bicep', 'l_tricep', 'r_brachium', 'r_forearm'], # right arm
+                ['l_foot', 'l_ham', 'l_quad', 'l_shin', 'l_calf'], # left leg
+                ['r_foot', 'r_ham', 'r_quad', 'r_shin', 'r_calf'] # right leg
+                ]
+
+NO_SUPERPARTS = len(PARTITIONS)
+
 def get_poses_and_detections(segment_key, split):
     movie_key, timestamp = segment_key.split('.')
 
@@ -434,51 +454,47 @@ def get_poses_and_detections(segment_key, split):
 
     detections = []
 
-    # Body partitions
-    partitions = [ ['back','chest'], # torso
-                   ['r_face', 'l_face'], # head
-                   ['l_hand', 'l_bicep', 'l_tricep', 'l_brachium', 'l_forearm'], # left arm
-                   ['r_hand', 'r_bicep', 'l_tricep', 'r_brachium', 'r_forearm'], # right arm
-                   ['l_foot', 'l_ham', 'l_quad', 'l_shin', 'l_calf'], # left leg
-                   ['r_foot', 'r_ham', 'r_quad', 'r_shin', 'r_calf'] # right leg
-                 ]
-    assert len(partitions) == 24
+    
+    assert sum([len(partition) for partition in PARTITIONS]) == 24
     superpartition_nos = []
-    for super_part in partitions:
+    for super_part in PARTITIONS:
         superpartition_nos.append([POSE2NO[pose_str] for pose_str in super_part])
         
 
     for ii in range(len(norm_boxes)):
         norm_box = norm_boxes[ii]
         body_parts = bodies[ii][0,:,:] # 0 is the image2bodypart mapping
+        box_H, box_W = body_parts.shape
         
         left, top, right, bottom, probabilty = norm_box
 
         bodypart_boxes = []
         for superpartition in superpartition_nos:
-            tops = []
-            lefts = []
-            bottoms = []
-            rights = []
+            part_tops = []
+            part_lefts = []
+            part_bottoms = []
+            part_rights = []
+            # each superpart consists of multiple parts head = ['r_face', 'l_face']
             for part_no in superpartition:
                 mask = body_parts == part_no # boolean mask for current body part
                 if np.any(mask):
                     indices = np.nonzero(mask)
-                    tops.append(np.min(indices[0]))
-                    lefts.append(np.min(indices[1]))
-                    bottoms.append(np.max(indices[0]))
-                    rights.append(np.max(indices[1]))
-            if tops:
-                top = np.min(tops)
-                left = np.min(lefts)
-                bottom = np.max(bottoms)
-                right = np.max(rights)
+                    part_tops.append(np.min(indices[0]))
+                    part_lefts.append(np.min(indices[1]))
+                    part_bottoms.append(np.max(indices[0]))
+                    part_rights.append(np.max(indices[1]))
+            if part_tops:
+                part_top = np.min(part_tops) / float(box_H)
+                part_left = np.min(part_lefts) / float(box_W)
+                part_bottom = np.max(part_bottoms) / float(box_H)
+                part_right = np.max(part_rights) / float(box_W)
             else:
-                top = -1.
-                left = -1.
-                bottom = -1.
-                right = -1.
-            bodypart_boxes.append([top, left, bottom, right])
+                part_top = -1.
+                part_left = -1.
+                part_bottom = -1.
+                part_right = -1.
+            # TODO normalize boxes
+            bodypart_boxes.append([part_top, part_left, part_bottom, part_right])
         
         detection = {"box":[top, left, bottom, right], 
                      "class_str": "person",
@@ -569,6 +585,7 @@ def match_annos_with_detections(annotations, detections, split):
     if no_det > MAX_ROIS: print('MORE DETECTIONS THAN MAX ROIS!!')
     labels_np = np.zeros([MAX_ROIS, NUM_CLASSES], np.int32)
     rois_np = np.zeros([MAX_ROIS, 4], np.float32) # the 0th index will be used as the featmap index
+    poses_np = np.zeros([MAX_ROIS, NO_SUPERPARTS, 4], np.float32)
  
     # TODO if no_gt or no_det is 0 this will give error
     # This is fixed within functions calling this
@@ -581,11 +598,15 @@ def match_annos_with_detections(annotations, detections, split):
             for dd in range(no_det):
                 cur_max_iou = max_iou_for_each_det[dd]
  
-                if not USE_GROUND_TRUTH_BOXES:
-                    top, left, bottom, right = detections[dd]['box']
-                else:
-                    ## DEBUGGING
-                    left, top, right, bottom = annotations[dd]['bbox']
+                # if not USE_GROUND_TRUTH_BOXES:
+                #     top, left, bottom, right = detections[dd]['box']
+                # else:
+                #     ## DEBUGGING
+                #     left, top, right, bottom = annotations[dd]['bbox']
+                top, left, bottom, right = detections[dd]['box']
+
+                if 'body_parts' in detections[dd]:
+                    poses_np[dd,:, :] = detections[dd]['body_parts'] # 6x4 array, 6 superparts - 4 coords
  
                 # # region of interest layer expects
                 # # regions of interest as lists of:
@@ -602,8 +623,10 @@ def match_annos_with_detections(annotations, detections, split):
         for dd in range(no_det):
             top, left, bottom, right = detections[dd]['box']
             rois_np[dd,:] = [top, left, bottom, right]
+            if 'body_parts' in detections[dd]:
+                    poses_np[dd,:, :] = detections[dd]['body_parts'] # 6x4 array, 6 superparts - 4 coords
  
-    return labels_np, rois_np, no_det
+    return labels_np, rois_np, no_det, poses_np
  
  
 def IoU_box(box1, box2):

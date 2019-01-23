@@ -195,12 +195,51 @@ class Model_Trainer():
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
         # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
-        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+        # output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+        
+        #               [sample, labels_np, rois_np, no_det, segment_key, poses_np] 
+        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string, tf.float32]
 
         # shuffle the list outside tf so I know the order. 
         #np.random.seed(5)
         # np.random.seed(7)
         np.random.shuffle(train_detection_segments)
+
+        # use only finished samples
+        finished_samples = [
+            '053oq2xB3oU',
+            '0f39OWEqJ24',
+            '0wBYFahr3uI',
+            '1ReZIMmD_8E',
+            '26V9UzqSguo',
+            '2bxKkUgcqpk',
+            '2DUITARAsWQ',
+            '2E_e8JlvTlg',
+            '2FIHxnZKg6A',
+            '2fwni_Kjf2M',
+            '2KpThOF_QmE',
+            '2qQs3Y9OJX0',
+            '32HR3MnDZ8g',
+            '3IOE-Q3UWdA',
+            '3_VjIRdXVdM',
+            '4gVsDd8PV9U',
+            '4k-rTF3oZKw',
+            '4Y5qi1gD2Sw',
+            '4ZpjKfu6Cl8',
+            '-5KQ66BBWC4',
+            '5LrOQEt_XVM',
+            '5milLu-6bWI',
+            '5MxjqHfkWFI',
+            '5YPjcdLbs5g',
+            '7g37N3eoQ9s',
+            '7nHkh4sP5Ks',
+            '-FaXLcSFjUI',
+            '-IELREHX_js',
+            'LIavUJVrXaI',
+            'LrDT25hmApw',
+        ]
+
+        train_detection_segments = [seg for seg in train_detection_segments if any([seg.startswith(samp) for samp in finished_samples])]
 
 
         if not USE_TFRECORD:
@@ -263,7 +302,7 @@ class Model_Trainer():
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
         # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
-        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+        # output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
 
         # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
         #if not self.evaluate:
@@ -308,7 +347,7 @@ class Model_Trainer():
         next_element = iterator.get_next()
 
         # Define shapes of the inputs coming from python functions
-        input_batch, labels, rois, no_dets, segment_keys = next_element
+        input_batch, labels, rois, no_dets, segment_keys, poses = next_element
 
         # input_batch = tf.cast(input_batch, tf.float32)
 
@@ -317,6 +356,7 @@ class Model_Trainer():
         rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
         no_dets.set_shape([None])
         segment_keys.set_shape([None])
+        poses.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NO_SUPERPARTS, 4])
         
 
         self.input_batch = input_batch
@@ -324,6 +364,7 @@ class Model_Trainer():
         self.rois = rois
         self.no_dets = no_dets
         self.segment_keys = segment_keys
+        self.poses = poses
         
         pass
 
@@ -332,6 +373,7 @@ class Model_Trainer():
         labels = self.labels
         rois = self.rois
         no_dets = self.no_dets
+        poses = self.poses
         self.is_training = tf.placeholder(tf.bool, [], name='TrainFlag')
 
         # TODO make i3d better
@@ -403,14 +445,15 @@ class Model_Trainer():
             cur_labels = labels[start_index:end_index]
             cur_rois = rois[start_index:end_index]
             # cur_no_dets = no_dets[start_index:end_index]
+            cur_poses = poses[start_index:end_index]
 
             # setup mappings and rois for each gpu batch , nz:nonzero
-            rois_nz, labels_nz, batch_indices_nz = model_layers.combine_batch_rois(cur_rois, cur_labels)
+            rois_nz, labels_nz, batch_indices_nz, poses_nz = model_layers.combine_batch_rois(cur_rois, cur_labels, cur_poses)
 
             with tf.device('/gpu:%d' % gg):
               with tf.name_scope('%s_%d' % ('GPU', gg)):
                 # get the logits
-                cur_logits = self.single_tower_inference(cur_input_seq, rois_nz, batch_indices_nz)
+                cur_logits = self.single_tower_inference(cur_input_seq, rois_nz, batch_indices_nz, poses_nz)
                 self.logits_list.append(cur_logits)
 
                 # get the loss
@@ -487,7 +530,7 @@ class Model_Trainer():
 
         
 
-    def single_tower_inference(self, cur_input_seq, cur_rois, cur_b_idx):
+    def single_tower_inference(self, cur_input_seq, cur_rois, cur_b_idx , cur_poses):
         # end_point = 'Mixed_4e'
         end_point = 'Mixed_4f'
         # end_point = 'Mixed_3c'
@@ -497,11 +540,12 @@ class Model_Trainer():
         logging.info('I3D end point is %s' % end_point)
 
         
-        augmented_sequence, augmented_rois = input_augmentation.augment_input_sequences(cur_input_seq, cur_rois)
+        augmented_sequence, augmented_rois, augmented_poses = input_augmentation.augment_input_sequences(cur_input_seq, cur_rois, cur_poses)
         self.original_seq = cur_input_seq
         self.augmented_seq = augmented_sequence
         cur_input_seq = tf.cond(self.is_training, lambda:augmented_sequence, lambda: cur_input_seq)
         cur_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
+        cur_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
 
         #### INITIAL FEATURES
         _, end_points = i3d.inference(cur_input_seq, self.is_training, self.dataset_fcn.NUM_CLASSES, end_point=end_point)
@@ -510,10 +554,11 @@ class Model_Trainer():
         self.feature_temp_len = feature_temp_len = int(features.shape[1])
 
 
-        augmented_rois = input_augmentation.augment_box_coords(cur_rois)
+        augmented_rois, augmented_poses = input_augmentation.augment_box_coords(cur_rois, cur_poses)
         # make sure they stay within boundaries
         # shifted_rois = tf.clip_by_value(shifted_rois, 0.0, 1.0)
         shifted_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
+        shifted_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
 
         # debugging
         self.shifted_rois = shifted_rois
@@ -530,7 +575,7 @@ class Model_Trainer():
 
         ## Args model selection
         logging.info('Using model architecture: %s' % self.architecture_str )
-        class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training)
+        class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training, shifted_poses)
         
 
 

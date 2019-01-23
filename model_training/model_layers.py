@@ -6,7 +6,7 @@ BOX_CROP_SIZE = [10,10]
 
 
 ### Layers after initial I3D Head
-def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx, is_training):
+def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx, is_training, pose_boxes):
     if architecture_str == 'i3d_tail':
         box_features =  temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         class_feats = i3d_tail_model(box_features, is_training)
@@ -21,16 +21,9 @@ def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx,
         class_feats =  non_local_ROI_feat_attention_model(box_features, features, cur_b_idx)
     elif  architecture_str == 'soft_attn':
         class_feats =  soft_roi_attention_model(features, shifted_rois, cur_b_idx, is_training)
-    elif  architecture_str == 'acrn_roi':
-        class_feats =  acrn_roi_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
-    elif  architecture_str == 'single_attn':
-        class_feats =  single_soft_roi_attention_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
-    elif  architecture_str == 'non_local_v2':
-        class_feats =  non_local_ROI_model_v2(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
-    elif  architecture_str == 'non_local_v3':
-        class_feats =  non_local_ROI_model_v3(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
-    elif  architecture_str == 'multi_non_local':
-        class_feats =  multi_non_local_block_roi(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+    elif  architecture_str == 'pose_soft_attn':
+        class_feats =  pose_soft_roi_model(features, shifted_rois, cur_b_idx, is_training, pose_boxes)
+
     else:
         print('Architecture not implemented!')
         raise NotImplementedError
@@ -277,6 +270,79 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
     # class_feats = tf.layers.flatten(avg_features)
 
     # return class_feats
+
+def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, pose_boxes):
+    with tf.variable_scope('Pose_Soft_Model'):
+        _, Tc, Hc, Wc, Cc = context_features.shape.as_list()
+        B = tf.shape(context_features)[0]
+        feature_map_channel = Cc / 4
+
+        roi_box_features = temporal_roi_cropping(context_features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+        R = tf.shape(roi_box_features)[0]
+
+        no_body_parts = pose_boxes.shape.as_list()[1]
+        body_part_boxes = tf.reshape(pose_boxes, [R*no_body_parts, 4])
+
+        roi_indices = tf.tile(tf.expand_dims(tf.range(R), axis=1), [1, no_body_parts])
+        # [[0,0,0,0,0,0], [1,1,1,1,1], ...]
+        roi_indices_rh = tf.reshape(roi_indices, [R*no_body_parts])
+        # [0,0,0,0,0,0, 1,1,1,1,1, ...]
+
+        part_crop_size = [3,3]
+        body_part_features_rh = temporal_roi_cropping(roi_box_features, body_part_boxes, roi_indices_rh, part_crop_size)
+        # [torso1, head1, larm1, rarm1, lleg1, rleg1, torso2, head2, ..] shape [num_boxes, T, crop_size[0], crop_size[1], C]
+        body_part_features = tf.reshape(body_part_features_rh, [R, no_body_parts, Tc, part_crop_size[0], part_crop_size[1], Cc])
+
+        body_feats = tf.reduce_mean(body_part_features, axis=1)
+
+
+        R = tf.shape(shifted_rois)[0]
+
+        flat_box_feats = basic_model(body_feats)
+        roi_embedding = tf.layers.dense(flat_box_feats, 
+                                        feature_map_channel, 
+                                        activation=tf.nn.relu,
+                                        kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                        name='RoiEmbedding')
+        roi_embedding = tf.layers.dropout(inputs=roi_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
+
+        context_embedding = tf.layers.conv3d(context_features, 
+                                            filters=feature_map_channel, 
+                                            kernel_size=[1,1,1], 
+                                            padding='SAME', 
+                                            activation=tf.nn.relu, 
+                                            name='ContextEmbedding')
+        context_embedding =  tf.layers.dropout(inputs=context_embedding, rate=0.5, training=is_training, name='Context_Dropout')
+        
+        # with tf.device('/cpu:0'):
+        roi_expanded = tf.expand_dims(tf.expand_dims(tf.expand_dims(roi_embedding, axis=1), axis=1), axis=1) # R,512 -> R,1,1,1,512
+        roi_tiled = tf.tile(roi_expanded, [1,Tc,Hc,Wc,1], 'RoiTiling')
+
+        # multiply context_feats by no of rois so we can concatenate
+        context_embedding_gathered = tf.gather(context_embedding, cur_b_idx, axis=0, name='ContextEmbGather')
+
+        roi_context_feats = tf.concat([roi_tiled, context_embedding_gathered], 4, name='RoiContextConcat')
+
+        relation_feats = tf.layers.conv3d(  roi_context_feats, 
+                                            filters=Cc, 
+                                            kernel_size=[1,1,1], 
+                                            padding='SAME', 
+                                            activation=None, 
+                                            name='RelationFeats')
+        
+        attention_map = tf.nn.sigmoid(relation_feats,'AttentionMap') # use sigmoid so it represents a heatmap of attention
+        # heatmap of attention
+        tf.add_to_collection('attention_map', attention_map) # for attn map generation
+        
+        # with tf.device('/cpu:0'):
+        # Multiply attention map with context features. Now this new feature represents the roi
+        gathered_context = tf.gather(context_features, cur_b_idx, axis=0, name='ContextGather')
+        tf.add_to_collection('feature_activations', gathered_context) # for attn map generation
+        soft_attention_feats = tf.multiply(attention_map, gathered_context)
+    
+
+    class_feats = i3d_tail_model(soft_attention_feats, is_training)
+    return class_feats
 
 def acrn_roi_model(context_features, shifted_rois, cur_b_idx, is_training):
     with tf.variable_scope('Soft_Attention_Model'):
@@ -614,7 +680,7 @@ def roi_object_relation_model(self, roi_box_features, context_features, cur_b_id
 
 ####### COMMON LAYERS ####### 
 
-def combine_batch_rois(rois, labels, ):#no_dets):
+def combine_batch_rois(rois, labels, poses):#no_dets):
     '''
     rois is [BATCH, MAX_ROIS, 4]
     labels is [BATCH, MAX_ROIS, NUM_CLASSES]
@@ -626,6 +692,9 @@ def combine_batch_rois(rois, labels, ):#no_dets):
      
     rois_all = tf.reshape(rois, [-1, 4])
     labels_all = tf.reshape(labels, [-1,num_classes])
+
+    no_superparts = poses.shape.as_list()[2]
+    poses_all = tf.reshape(poses, [-1, no_superparts, 4])
  
     # We need a way to map each rois to its sample
     # samples have their batch indices
@@ -654,8 +723,9 @@ def combine_batch_rois(rois, labels, ):#no_dets):
     rois_nonzero = tf.boolean_mask(rois_all, non_zero_rows, axis=0)
     labels_nonzero = tf.boolean_mask(labels_all, non_zero_rows, axis=0)
     batch_indices_nonzero = tf.boolean_mask(batch_indices_all, non_zero_rows, axis=0)
+    poses_nonzero = tf.boolean_mask(poses_all, non_zero_rows, axis=0)
  
-    return rois_nonzero, labels_nonzero, batch_indices_nonzero
+    return rois_nonzero, labels_nonzero, batch_indices_nonzero, poses_nonzero
 
 def temporal_roi_cropping(features, rois, batch_indices, crop_size):
     ''' features is of shape [Batch, T, H, W, C]

@@ -2,10 +2,12 @@ import tensorflow as tf
 import model_layers
 
 ### Augmentations
-def augment_input_sequences(cur_input_seq, cur_rois):
+def augment_input_sequences(cur_input_seq, cur_rois, cur_poses):
     _, T, H, W, C = cur_input_seq.shape.as_list()
     ##### AUGMENTATION
     top, left, bottom, right = cur_rois[:,0], cur_rois[:,1], cur_rois[:,2], cur_rois[:,3]
+
+    poses_top, poses_left, poses_bottom, poses_right = cur_poses[:,:,0], cur_poses[:,:,1], cur_poses[:,:,2], cur_poses[:,:,3],
 
     ### flipping image and coords left-right
     flip_mux = tf.random_uniform([], minval=0, maxval=1) > 0.5
@@ -20,6 +22,12 @@ def augment_input_sequences(cur_input_seq, cur_rois):
     new_left  = tf.cond(flip_mux, lambda:left, lambda: flipped_left)
     new_right = tf.cond(flip_mux, lambda:right, lambda: flipped_right)
     augmented_rois = tf.stack([top, new_left, bottom, new_right], axis=1)
+
+    flipped_poses_left = 1.0 - poses_right
+    flipped_poses_right = 1.0 - poses_left
+    new_poses_left  = tf.cond(flip_mux, lambda:poses_left, lambda: flipped_poses_left)
+    new_poses_right = tf.cond(flip_mux, lambda:poses_right, lambda: flipped_poses_right)
+    augmented_poses = tf.stack([poses_top, new_poses_left, poses_bottom, new_poses_right], axis=2)
 
     # cur_input_seq = tf.cond(self.is_training, lambda:input_seq, lambda: cur_input_seq)
     # cur_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
@@ -68,9 +76,9 @@ def augment_input_sequences(cur_input_seq, cur_rois):
 
     cropped_sequence = model_layers.temporal_roi_cropping(cur_input_seq, new_boxes, tf.range(B), [H, W])
 
-    return cropped_sequence, augmented_rois
+    return cropped_sequence, augmented_rois, augmented_poses
 
-def augment_box_coords(cur_rois):
+def augment_box_coords(cur_rois, cur_poses):
     # quick augmentation on roi coords
     # coord_aug_val = 0.10
     #coord_aug_val = 0.00
@@ -137,8 +145,34 @@ def augment_box_coords(cur_rois):
 
     ### flipped_left = tf.cond(flip_switch<0.5, lambda: left_aug, lambda:right_aug)
     ### flipped_right = tf.cond(flip_switch<0.5, lambda: right_aug, lambda:left_aug)
+
+    # get pose stuff done
+    # pose_top * width + box_left : the total distance from image origin to pose top
+    # pose_top * width + box_left - left_aug : distance from new origin to pose top
+    # (pose_top * width + box_left - left_aug) / width_aug : new normalized distance
+    poses_top, poses_left, poses_bottom, poses_right = cur_poses[:,:,0], cur_poses[:,:,1], cur_poses[:,:,2], cur_poses[:,:,3],
     
+    tiled_box_left = tf.tile(tf.expand_dims(left, axis=1), [1,6])
+    tiled_width = tf.tile(tf.expand_dims(width, axis=1), [1,6])
+    tiled_left_aug = tf.tile(tf.expand_dims(left_aug, axis=1), [1,6])
+    tiled_width_aug = tf.tile(tf.expand_dims(width_aug, axis=1), [1,6])
+
+    tiled_box_top = tf.tile(tf.expand_dims(top, axis=1), [1,6])
+    tiled_height = tf.tile(tf.expand_dims(height, axis=1), [1,6])
+    tiled_top_aug = tf.tile(tf.expand_dims(top_aug, axis=1), [1,6])
+    tiled_height_aug = tf.tile(tf.expand_dims(height_aug, axis=1), [1,6])
+
+
+    new_poses_left = (poses_left * tiled_width + tiled_box_left - tiled_left_aug) / tiled_width_aug
+    new_poses_right = (poses_right * tiled_width + tiled_box_left - tiled_left_aug) / tiled_width_aug
+    
+    new_poses_top = (poses_top * tiled_height + tiled_box_top - tiled_top_aug) / tiled_height_aug
+    new_poses_bottom = (poses_bottom * tiled_height + tiled_box_top - tiled_top_aug) / tiled_height_aug
+    
+    augmented_poses = tf.stack([new_poses_top, new_poses_left, new_poses_bottom, new_poses_right], axis=2)
+
+
     # augmented_rois = tf.stack([top_aug, flipped_left, bottom_aug, flipped_right], axis=1)
     augmented_rois = tf.stack([top_aug, left_aug, bottom_aug, right_aug], axis=1)
 
-    return augmented_rois
+    return augmented_rois, augmented_poses
