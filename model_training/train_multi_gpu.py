@@ -203,6 +203,7 @@ class Model_Trainer():
         # shuffle the list outside tf so I know the order. 
         #np.random.seed(5)
         # np.random.seed(7)
+
         np.random.shuffle(train_detection_segments)
 
         # use only finished samples
@@ -241,7 +242,8 @@ class Model_Trainer():
 
         train_detection_segments = [seg for seg in train_detection_segments if any([seg.startswith(samp) for samp in finished_samples])]
 
-
+        # debug
+        # train_detection_segments = ["LIavUJVrXaI.1385"] + train_detection_segments # this sample is empty
         if not USE_TFRECORD:
             dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
             dataset = dataset.repeat()# repeat infinitely
@@ -262,6 +264,8 @@ class Model_Trainer():
         # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
         #                                 cycle_length=10, block_length=1)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        
+        dataset = dataset.filter(dataset_ava.filter_no_detections)
         dataset = dataset.shuffle(self.batch_size * self.no_gpus * 20)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
@@ -330,6 +334,7 @@ class Model_Trainer():
                 dataset = dataset.map(dataset_ava.get_tfrecord_test,
                         num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        dataset = dataset.filter(dataset_ava.filter_no_detections)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         self.validation_dataset = dataset
@@ -952,6 +957,13 @@ class Model_Trainer():
 
 
     def run_epoch(self, training_flag, epoch_no):
+        # debugging for sample input
+        # for _ in range(len(self.train_detection_segments)):
+        #     feed_dict = {}
+        #     feed_dict[self.input_handle] = self.training_handle
+        #     self.sess.run(self.segment_keys, feed_dict=feed_dict)
+            # print(self.sess.run(self.segment_keys, feed_dict=feed_dict))
+
         # import pdb;pdb.set_trace()
         run_dict = {'loss_val': self.loss_val,
                     'regularization': self.regularizers,

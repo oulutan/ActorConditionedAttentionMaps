@@ -152,6 +152,11 @@ def get_data(segment_key, split):
     return sample, labels_np, rois_np, no_det, segment_key, poses_np
 
 
+## filters samples with no detected people!!!!
+def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key, poses_np):
+    rois_bool = tf.cast(rois_np, tf.bool)
+    return tf.reduce_any(rois_bool)
+
 import tensorflow as tf
 def get_tfrecord_train(serialized_example):
     split = 'train'
@@ -435,14 +440,26 @@ PARTITIONS = [ ['back','chest'], # torso
 NO_SUPERPARTS = len(PARTITIONS)
 
 def get_poses_and_detections(segment_key, split):
+    # print(segment_key)
     movie_key, timestamp = segment_key.split('.')
 
     poses_folder = AVA_FOLDER + '/poses/' + split + '/'
 
     poses_pkl_path = os.path.join(poses_folder, movie_key, "%s.pkl" % timestamp)
 
-    with open(poses_pkl_path) as fp:
+    with open(poses_pkl_path, "rb") as fp:
         data = pickle.load(fp)
+
+    # try:
+    #     with open(poses_pkl_path, "rb") as fp:
+    #         data = pickle.load(fp)
+    # except KeyError:
+    #     print(segment_key)
+    #     poses_pkl_path = os.path.join(poses_folder, "-5KQ66BBWC4", "%s.pkl" % "0902")
+    #     with open(poses_pkl_path, "rb") as fp:
+    #         data = pickle.load(fp)
+
+
 
     # boxes are [left, top, right, bottom, probabilty]
     # data['boxes'][1] and data['boxes_normalized']
@@ -450,7 +467,12 @@ def get_poses_and_detections(segment_key, split):
     # body parts[0,:,:] is a mask of body parts using POSE_PARTS integers
 
     norm_boxes = data['boxes_normalized']
-    bodies = data['bodies'][1]
+    # bodies = data['bodies'][1] 
+    # if no person is detected data['bodies']=None
+    if data['bodies']:
+        bodies = data['bodies'][1]
+    else:
+        bodies = []
 
     detections = []
 
@@ -475,6 +497,7 @@ def get_poses_and_detections(segment_key, split):
             part_bottoms = []
             part_rights = []
             # each superpart consists of multiple parts head = ['r_face', 'l_face']
+            # iterate over sub-parts
             for part_no in superpartition:
                 mask = body_parts == part_no # boolean mask for current body part
                 if np.any(mask):
