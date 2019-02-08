@@ -57,6 +57,7 @@ def basic_model_pooled(roi_box_features):
     # temporal_len = roi_box_features.shape[1]
     B, temporal_len, H, W, C = roi_box_features.shape
     avg_features = tf.nn.avg_pool3d(      roi_box_features,
+    #avg_features = tf.nn.max_pool3d(      roi_box_features,
                                             ksize=[1, temporal_len, H, W, 1],
                                             strides=[1, temporal_len, H, W, 1],
                                             padding='VALID',
