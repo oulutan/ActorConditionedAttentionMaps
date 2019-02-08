@@ -293,18 +293,37 @@ def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, 
         # [torso1, head1, larm1, rarm1, lleg1, rleg1, torso2, head2, ..] shape [num_boxes, T, crop_size[0], crop_size[1], C]
         body_part_features = tf.reshape(body_part_features_rh, [R, no_body_parts, Tc, part_crop_size[0], part_crop_size[1], Cc])
 
-        body_feats = tf.reduce_mean(body_part_features, axis=1)
+        parts_list = []
+        part_channel = feature_map_channel / 6
+        for ii in range(no_body_parts):
+            cur_body_part = body_part_features[:,ii,:,:,:,:]
+            flat_part_feats = basic_model_pooled(cur_body_part)
+            part_embedding = tf.layers.dense(flat_part_feats, 
+                                            part_channel, 
+                                            activation=tf.nn.relu,
+                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                            name='RoiEmbedding_%i' % ii)
+            part_embedding = tf.layers.dropout(inputs=part_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
+            parts_list.append(part_embedding)
+        
+        full_body_embedding = tf.concat(parts_list, axis=1)
+        roi_embedding = full_body_embedding
+
+        
+
+        # body_feats = tf.reduce_mean(body_part_features, axis=1)
+        import pdb;pdb.set_trace()
 
 
         R = tf.shape(shifted_rois)[0]
 
-        flat_box_feats = basic_model(body_feats)
-        roi_embedding = tf.layers.dense(flat_box_feats, 
-                                        feature_map_channel, 
-                                        activation=tf.nn.relu,
-                                        kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
-                                        name='RoiEmbedding')
-        roi_embedding = tf.layers.dropout(inputs=roi_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
+        # flat_box_feats = basic_model_pooled(body_feats)
+        # roi_embedding = tf.layers.dense(flat_box_feats, 
+        #                                 feature_map_channel, 
+        #                                 activation=tf.nn.relu,
+        #                                 kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+        #                                 name='RoiEmbedding')
+        # roi_embedding = tf.layers.dropout(inputs=roi_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
 
         context_embedding = tf.layers.conv3d(context_features, 
                                             filters=feature_map_channel, 
