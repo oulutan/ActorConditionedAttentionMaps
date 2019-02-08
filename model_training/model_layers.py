@@ -312,7 +312,6 @@ def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, 
         
 
         # body_feats = tf.reduce_mean(body_part_features, axis=1)
-        import pdb;pdb.set_trace()
 
 
         R = tf.shape(shifted_rois)[0]
