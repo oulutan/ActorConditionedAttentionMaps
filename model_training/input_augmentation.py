@@ -104,8 +104,8 @@ def augment_box_coords(cur_rois, cur_poses):
     # area_aug_mult = tf.random_uniform([R], minval=0.50, maxval=2.00, name='AreaAugmentationMult')
     # reduce or increase area with same prob
     area_aug_mux = tf.random_uniform([R], minval=-1.0, maxval=1.0, name='AreaAugmentationMult')
-    min_area_mult = 0.25
-    max_area_mult = 2.00
+    min_area_mult = 0.50
+    max_area_mult = 1.50
     area_reducers = -area_aug_mux * (1.-min_area_mult) + min_area_mult
     area_reducers = area_reducers * tf.cast(area_aug_mux < 0.0, tf.float32) # only take mux < 0
     area_increasers = area_aug_mux * (max_area_mult-1.) + 1.

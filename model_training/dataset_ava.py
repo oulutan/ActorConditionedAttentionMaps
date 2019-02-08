@@ -417,8 +417,8 @@ POSE_PARTS = {
     14: "l_shin",
     15: "l_bicep",
     16: "r_bicep",
-    17: "r_tricep",
-    18: "l_tricep",
+    17: "l_tricep",
+    18: "r_tricep",
     19: "l_forearm",
     20: "r_forearm",
     21: "l_brachium",
@@ -432,7 +432,7 @@ POSE2NO = {v:p for p, v in POSE_PARTS.items()}
 PARTITIONS = [ ['back','chest'], # torso
                 ['r_face', 'l_face'], # head
                 ['l_hand', 'l_bicep', 'l_tricep', 'l_brachium', 'l_forearm'], # left arm
-                ['r_hand', 'r_bicep', 'l_tricep', 'r_brachium', 'r_forearm'], # right arm
+                ['r_hand', 'r_bicep', 'r_tricep', 'r_brachium', 'r_forearm'], # right arm
                 ['l_foot', 'l_ham', 'l_quad', 'l_shin', 'l_calf'], # left leg
                 ['r_foot', 'r_ham', 'r_quad', 'r_shin', 'r_calf'] # right leg
                 ]
@@ -459,6 +459,19 @@ def get_poses_and_detections(segment_key, split):
     #     with open(poses_pkl_path, "rb") as fp:
     #         data = pickle.load(fp)
 
+    # we need this so we can normalize coords
+    ## object detection results
+    obj_detects_folder = AVA_FOLDER + '/objects/' + split + '/'
+    ## ava detection results
+    #obj_detects_folder = AVA_FOLDER + '/ava_trained_persons/' + split + '/object_detections/'
+    segment_objects_path = os.path.join(obj_detects_folder, movie_key, '%s.json' %timestamp )
+     
+    with open(segment_objects_path) as fp:
+        results = json.load(fp)
+ 
+    H = results['height']
+    W = results['width']
+
 
 
     # boxes are [left, top, right, bottom, probabilty]
@@ -466,7 +479,9 @@ def get_poses_and_detections(segment_key, split):
     # data['bodies'][1] has body parts [[3xHxW]]
     # body parts[0,:,:] is a mask of body parts using POSE_PARTS integers
 
-    norm_boxes = data['boxes_normalized']
+    # norm_boxes = data['boxes_normalized']
+    boxes = data['boxes'][1] # left, top, right, bottom, probabilty 
+    norm_boxes = boxes / np.array([W, H, W, H, 1.])
     # bodies = data['bodies'][1] 
     # if no person is detected data['bodies']=None
     if data['bodies']:
@@ -525,6 +540,8 @@ def get_poses_and_detections(segment_key, split):
                      "class_no": 1,
                      "body_parts": bodypart_boxes}
         detections.append(detection)
+
+    detections.sort(key=lambda x: x['score'], reverse=True)
 
     return detections
         

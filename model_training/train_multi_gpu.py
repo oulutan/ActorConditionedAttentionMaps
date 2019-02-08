@@ -204,43 +204,13 @@ class Model_Trainer():
         #np.random.seed(5)
         # np.random.seed(7)
 
-        np.random.shuffle(train_detection_segments)
+        # np.random.shuffle(train_detection_segments)
 
-        # use only finished samples
-        finished_samples = [
-            '053oq2xB3oU',
-            '0f39OWEqJ24',
-            '0wBYFahr3uI',
-            '1ReZIMmD_8E',
-            '26V9UzqSguo',
-            '2bxKkUgcqpk',
-            '2DUITARAsWQ',
-            '2E_e8JlvTlg',
-            '2FIHxnZKg6A',
-            '2fwni_Kjf2M',
-            '2KpThOF_QmE',
-            '2qQs3Y9OJX0',
-            '32HR3MnDZ8g',
-            '3IOE-Q3UWdA',
-            '3_VjIRdXVdM',
-            '4gVsDd8PV9U',
-            '4k-rTF3oZKw',
-            '4Y5qi1gD2Sw',
-            '4ZpjKfu6Cl8',
-            '-5KQ66BBWC4',
-            '5LrOQEt_XVM',
-            '5milLu-6bWI',
-            '5MxjqHfkWFI',
-            '5YPjcdLbs5g',
-            '7g37N3eoQ9s',
-            '7nHkh4sP5Ks',
-            '-FaXLcSFjUI',
-            '-IELREHX_js',
-            'LIavUJVrXaI',
-            'LrDT25hmApw',
-        ]
+        # # use only finished samples
+        # finished_samples = [  ]
 
-        train_detection_segments = [seg for seg in train_detection_segments if any([seg.startswith(samp) for samp in finished_samples])]
+        # # use only finished movies
+        # train_detection_segments = [seg for seg in train_detection_segments if any([seg.startswith(samp) for samp in finished_samples])]
 
         # debug
         # train_detection_segments = ["LIavUJVrXaI.1385"] + train_detection_segments # this sample is empty
@@ -548,26 +518,33 @@ class Model_Trainer():
         augmented_sequence, augmented_rois, augmented_poses = input_augmentation.augment_input_sequences(cur_input_seq, cur_rois, cur_poses)
         self.original_seq = cur_input_seq
         self.augmented_seq = augmented_sequence
-        cur_input_seq = tf.cond(self.is_training, lambda:augmented_sequence, lambda: cur_input_seq)
-        cur_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
-        cur_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
+        s_input_seq = tf.cond(self.is_training, lambda:augmented_sequence, lambda: cur_input_seq)
+        s_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
+        s_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
 
         #### INITIAL FEATURES
-        _, end_points = i3d.inference(cur_input_seq, self.is_training, self.dataset_fcn.NUM_CLASSES, end_point=end_point)
+        _, end_points = i3d.inference(s_input_seq, self.is_training, self.dataset_fcn.NUM_CLASSES, end_point=end_point)
         features = end_points[end_point]
         # import pdb;pdb.set_trace()
         self.feature_temp_len = feature_temp_len = int(features.shape[1])
 
 
-        augmented_rois, augmented_poses = input_augmentation.augment_box_coords(cur_rois, cur_poses)
+        augmented_rois, augmented_poses = input_augmentation.augment_box_coords(s_rois, s_poses)
         # make sure they stay within boundaries
         # shifted_rois = tf.clip_by_value(shifted_rois, 0.0, 1.0)
-        shifted_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
-        shifted_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
+        # shifted_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
+        # shifted_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
+        t_v_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
+        t_v_poses = tf.cond(self.is_training, lambda:augmented_poses, lambda: cur_poses)
 
         # debugging
-        self.shifted_rois = shifted_rois
+        self.shifted_rois = t_v_rois
+        # self.shifted_rois = s_rois
         self.cur_rois = cur_rois
+
+        self.shifted_poses = t_v_poses
+        # self.shifted_poses = s_poses
+        self.cur_poses = cur_poses
 
         ## aug debug
         # self.regular_keyframe_rois = dataset_tf.temporal_roi_cropping(cur_input_seq, cur_rois, cur_b_idx, [100,100])[:,16,:]
@@ -580,7 +557,7 @@ class Model_Trainer():
 
         ## Args model selection
         logging.info('Using model architecture: %s' % self.architecture_str )
-        class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training, shifted_poses)
+        class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, t_v_rois, cur_b_idx, self.is_training, t_v_poses)
         
 
 
@@ -980,11 +957,15 @@ class Model_Trainer():
                     }
         feed_dict = {}
 
-        ### aug debug
+        # ### aug debug
+        # run_dict['input_batch'] = self.input_batch
         # run_dict['shifted_rois'] = self.shifted_rois
         # run_dict['regular_rois'] = self.cur_rois
         # run_dict['original_seq'] = self.original_seq
         # run_dict['augmented_seq'] = self.augmented_seq
+        # run_dict['shifted_poses'] = self.shifted_poses
+        # run_dict['regular_poses'] = self.cur_poses
+
         if (self.architecture_str == 'soft_attn'  or self.architecture_str == 'single_attn') and GENERATE_ATTN_MAPS:
             run_dict['attention_map'] = tf.get_collection('attention_map')[0]
             run_dict['feature_activations'] = tf.get_collection('feature_activations')[0]
@@ -1069,8 +1050,10 @@ class Model_Trainer():
                 run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
                 run_metadata = None
 
-            # Run training
+            ################ Run training ###############33
             out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+
+            # Attention map generation
             if GENERATE_ATTN_MAPS:
                 roi_probs = out_dict['pred_probs']
                 for nnn in range(out_dict['no_dets'][0]):
@@ -1114,16 +1097,53 @@ class Model_Trainer():
 
             # import pdb;pdb.set_trace()
 
-            #### aug debug
+            # ### aug debug
             # shifted_rois = out_dict['shifted_rois']
             # regular_rois = out_dict['regular_rois']
-            # for ii in range(shifted_rois.shape[0]):
-            #     if ii == 0: import cv2
-            #     shifted_image = shifted_rois[ii]
-            #     regular_image = regular_rois[ii]
-            #     cv2.imwrite('./rois/%.2i_shifted.jpg' % ii, shifted_image)
-            #     cv2.imwrite('./rois/%.2i_regular.jpg' % ii, regular_image)
-            #     print('%.2i written' % ii)
+            # shifted_poses = out_dict['shifted_poses']
+            # regular_poses = out_dict['regular_poses']
+            # original_seq = out_dict['original_seq']
+            # augmented_seq = out_dict['augmented_seq']
+            
+            # org_mid_img = original_seq[0,16,:]
+            # org_mid_img = org_mid_img[:,:,::-1].astype(np.uint8)
+            # H,W,C = org_mid_img.shape
+
+            # aug_mid_img = augmented_seq[0,16,:]
+            # aug_mid_img = aug_mid_img[:,:,::-1].astype(np.uint8)
+            
+            # for jj in range(shifted_rois.shape[0]):
+            #     if jj == 0: import cv2
+            #     # copy_image = np.uint8(np.copy(org_mid_img))
+            #     copy_image = np.uint8(np.copy(aug_mid_img))
+            #     # top,left,bottom,right
+            #     shifted_roi = shifted_rois[jj]
+            #     regular_roi = regular_rois[jj]
+            #     shifted_roi = [int(coord*400) for coord in shifted_roi.tolist()]
+            #     regular_roi = [int(coord*400) for coord in regular_roi.tolist()]
+            #     # roi = regular_roi
+            #     roi = shifted_roi
+            #     # cv2.rectangle(copy_image, (left,top), (right, bottom), (255,0,0), 1)
+            #     img_to_show = cv2.rectangle(copy_image, (roi[1],roi[0]), (roi[3], roi[2]), (0,0,255), 2)
+            #     # cv2.imshow('win', np.uint8(img_to_show));cv2.waitKey(500);cv2.destroyAllWindows()
+
+            #     shifted_pose = shifted_poses[jj]
+            #     regular_pose = regular_poses[jj]
+            #     np.random.seed(10)
+            #     colors = np.random.randint(0,255,[6,3])
+            #     for pp in range(6):
+            #         cur_part = shifted_pose[pp]
+            #         roi_W = roi[3] - roi[1]
+            #         roi_H = roi[2] - roi[0]
+            #         pose_left, pose_right = roi[1] + int(cur_part[1] * roi_W), roi[1] + int(cur_part[3] * roi_W)
+            #         pose_top, pose_bottom = roi[0] + int(cur_part[0] * roi_H), roi[0] + int(cur_part[2] * roi_H)
+            #         img_to_show = cv2.rectangle(img_to_show, (pose_left, pose_top), (pose_right, pose_bottom), colors[pp], 1)
+
+            #     cv2.imshow('win', np.uint8(img_to_show));cv2.waitKey(0);#cv2.destroyAllWindows()
+            #     # import pdb;pdb.set_trace()
+            #     # cv2.imwrite('./rois/%.2i_shifted.jpg' % ii, shifted_image)
+            #     # cv2.imwrite('./rois/%.2i_regular.jpg' % ii, regular_image)
+            #     # print('%.2i written' % ii)
 
             # import pdb;pdb.set_trace()
             # print(info)
