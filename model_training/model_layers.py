@@ -301,7 +301,7 @@ def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, 
             part_embedding = tf.layers.dense(flat_part_feats, 
                                             part_channel, 
                                             activation=tf.nn.relu,
-                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.1),
                                             name='RoiEmbedding_%i' % ii)
             part_embedding = tf.layers.dropout(inputs=part_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
             parts_list.append(part_embedding)

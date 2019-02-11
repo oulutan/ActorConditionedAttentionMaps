@@ -44,7 +44,7 @@ HOSTNAME = socket.gethostname()
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
 PREPROCESS_CORES = 5 # times number of gpus
-BUFFER_SIZE = 10
+BUFFER_SIZE = 15
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -204,13 +204,16 @@ class Model_Trainer():
         #np.random.seed(5)
         # np.random.seed(7)
 
-        # np.random.shuffle(train_detection_segments)
+        np.random.shuffle(train_detection_segments)
 
         # # use only finished samples
         # finished_samples = [  ]
 
         # # use only finished movies
         # train_detection_segments = [seg for seg in train_detection_segments if any([seg.startswith(samp) for samp in finished_samples])]
+
+        # ignore buggy ones
+        train_detection_segments = [seg for seg in train_detection_segments if "D8Vhxbho1fY" not in seg]
 
         # debug
         # train_detection_segments = ["LIavUJVrXaI.1385"] + train_detection_segments # this sample is empty
@@ -449,6 +452,9 @@ class Model_Trainer():
                 tf.get_variable_scope().reuse_variables()
 
                 cur_gradients = self.optimizer.compute_gradients(cur_combined_loss)
+
+                # gradient clipping
+                cur_gradients = [(tf.clip_by_value(grad_1, -5., 5.), var_1) for grad_1, var_1 in cur_gradients]
 
                 self.gradients_list.append(cur_gradients)
 
@@ -1018,6 +1024,7 @@ class Model_Trainer():
             num_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus)
             # num_iters = 20
             logging.info('Evaluating on full validation set')
+        #num_iters = 300
 
         # pbar = tqdm(total=len(data_prov.data_list)//BATCH_SIZE, ncols=100)
         pbar = tqdm(total=num_iters, ncols=100)
