@@ -454,7 +454,7 @@ class Model_Trainer():
                 cur_gradients = self.optimizer.compute_gradients(cur_combined_loss)
 
                 # gradient clipping
-                cur_gradients = [(tf.clip_by_value(grad_1, -5., 5.), var_1) for grad_1, var_1 in cur_gradients]
+                cur_gradients = [(tf.clip_by_value(grad_1, -1., 1.), var_1) for grad_1, var_1 in cur_gradients]
 
                 self.gradients_list.append(cur_gradients)
 
@@ -844,10 +844,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                #model_saver.restore(sess, ckpt_file)
-                #logging.info('Loading model checkpoint from: ' + ckpt_file)
-                custom_loader(sess,ckpt_file)
-                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                model_saver.restore(sess, ckpt_file)
+                logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
@@ -876,8 +876,8 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
-            lr_max = 0.02
-            lr_min = 0.0001
+            lr_max = 0.01
+            lr_min = 0.001
             reset_interval = 10
             self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * g_step/reset_interval))
             logging.info('Current learning rate is %f' % self.current_learning_rate)
@@ -971,6 +971,8 @@ class Model_Trainer():
         # run_dict['augmented_seq'] = self.augmented_seq
         # run_dict['shifted_poses'] = self.shifted_poses
         # run_dict['regular_poses'] = self.cur_poses
+
+	#run_dict['pose_boxes'] = tf.get_collection('pose_boxes')[0]
 
         if (self.architecture_str == 'soft_attn'  or self.architecture_str == 'single_attn') and GENERATE_ATTN_MAPS:
             run_dict['attention_map'] = tf.get_collection('attention_map')[0]
@@ -1161,6 +1163,8 @@ class Model_Trainer():
             if ii == 0:
                 seg_keys_str = ', '.join(out_dict['segment_keys'])
                 logging.info('Starting the iteration with keys %s' % seg_keys_str)
+            #seg_keys_str = ', '.join(out_dict['segment_keys'])
+            #logging.info('Current keys %s' % seg_keys_str)
             
 
             # keep track of out probs for each roi
@@ -1234,6 +1238,7 @@ class Model_Trainer():
             message += ', Loss %.4f' % (epoch_loss/float(step))
             # message += '\n'
             message += ', Regu %.4f' % (out_dict['regularization'])
+            message += ', Closs %.4f' % (out_dict['loss_val'])
             # pdb.set_trace()
 
             # logging.info(message)

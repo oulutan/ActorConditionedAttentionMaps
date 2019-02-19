@@ -293,10 +293,17 @@ def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, 
         # [torso1, head1, larm1, rarm1, lleg1, rleg1, torso2, head2, ..] shape [num_boxes, T, crop_size[0], crop_size[1], C]
         body_part_features = tf.reshape(body_part_features_rh, [R, no_body_parts, Tc, part_crop_size[0], part_crop_size[1], Cc])
 
+	## pool arms and legs together [torso, head, sum(arms), sum(legs)]
+	pooled_features = [	body_part_features[:,0,], 
+				body_part_features[:,1,], 
+				body_part_features[:,2,] + body_part_features[:,3,], 
+				body_part_features[:,4,] + body_part_features[:,5,]]
+
         parts_list = []
-        part_channel = feature_map_channel / 6
-        for ii in range(no_body_parts):
-            cur_body_part = body_part_features[:,ii,:,:,:,:]
+        part_channel = feature_map_channel / 4
+        for ii in range(4):
+            #cur_body_part = body_part_features[:,ii,:,:,:,:]
+            cur_body_part = pooled_features[ii]
             flat_part_feats = basic_model_pooled(cur_body_part)
             part_embedding = tf.layers.dense(flat_part_feats, 
                                             part_channel, 
@@ -305,7 +312,8 @@ def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, 
                                             name='RoiEmbedding_%i' % ii)
             part_embedding = tf.layers.dropout(inputs=part_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
             parts_list.append(part_embedding)
-        
+
+	
         full_body_embedding = tf.concat(parts_list, axis=1)
         roi_embedding = full_body_embedding
 
@@ -357,6 +365,7 @@ def pose_soft_roi_model(context_features, shifted_rois, cur_b_idx, is_training, 
         gathered_context = tf.gather(context_features, cur_b_idx, axis=0, name='ContextGather')
         tf.add_to_collection('feature_activations', gathered_context) # for attn map generation
         soft_attention_feats = tf.multiply(attention_map, gathered_context)
+	tf.add_to_collection('pose_boxes', pose_boxes)
     
 
     class_feats = i3d_tail_model(soft_attention_feats, is_training)

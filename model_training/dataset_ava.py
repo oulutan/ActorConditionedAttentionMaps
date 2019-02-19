@@ -51,6 +51,7 @@ USE_GROUND_TRUTH_BOXES = False
 
 #MAX_ROIS_IN_TRAINING = 15
 MAX_ROIS_IN_TRAINING = 10
+CONF_TH = 0.20
  
 # USE_TRACKER_TEMPORAL_ROIS = False
  
@@ -395,7 +396,9 @@ def get_labels(segment_key,split):
     # detections = get_obj_detection_results(segment_key,split)
     # labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
 
-    detections = get_poses_and_detections(segment_key,split)
+    #detections = get_poses_and_detections(segment_key,split)
+    detections = get_preprocessed_poses_and_detections(segment_key,split)
+    detections = [det for det in detections if det['score'] > CONF_TH]
     labels_np, rois_np, no_det, poses_np = match_annos_with_detections(sample_annotations, detections, split)
      
     return labels_np, rois_np, no_det, poses_np
@@ -439,6 +442,24 @@ PARTITIONS = [ ['back','chest'], # torso
                 ]
 
 NO_SUPERPARTS = len(PARTITIONS)
+
+def get_preprocessed_poses_and_detections(segment_key,split):
+    movie_key, timestamp = segment_key.split('.')
+
+    pose_boxes_folder = AVA_FOLDER + '/pose_boxes/' + split + '/'
+
+    pose_box_json_path = os.path.join(pose_boxes_folder, movie_key, "%s.json" % timestamp)
+
+    try:
+      with open(pose_box_json_path) as fp:
+        detections = json.load(fp)
+    except IOError:
+        detections = []
+
+    return detections
+
+    
+
 
 def get_poses_and_detections(segment_key, split):
     # print(segment_key)
