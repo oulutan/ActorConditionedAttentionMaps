@@ -217,7 +217,7 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
         roi_box_features = temporal_roi_cropping(context_features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         R = tf.shape(shifted_rois)[0]
 
-        flat_box_feats = basic_model(roi_box_features)
+        flat_box_feats = basic_model_pooled(roi_box_features)
         roi_embedding = tf.layers.dense(flat_box_feats, 
                                         feature_map_channel, 
                                         activation=tf.nn.relu,
@@ -230,8 +230,12 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
                                             kernel_size=[1,1,1], 
                                             padding='SAME', 
                                             activation=tf.nn.relu, 
+                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
                                             name='ContextEmbedding')
         context_embedding =  tf.layers.dropout(inputs=context_embedding, rate=0.5, training=is_training, name='Context_Dropout')
+
+        # roi_embedding = tf.layers.dropout(inputs=flat_box_feats, rate=0.5, training=is_training, name='RoI_Dropout')
+        # context_embedding =  tf.layers.dropout(inputs=context_features, rate=0.5, training=is_training, name='Context_Dropout')
         
         # with tf.device('/cpu:0'):
         roi_expanded = tf.expand_dims(tf.expand_dims(tf.expand_dims(roi_embedding, axis=1), axis=1), axis=1) # R,512 -> R,1,1,1,512
@@ -247,6 +251,7 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
                                             kernel_size=[1,1,1], 
                                             padding='SAME', 
                                             activation=None, 
+                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
                                             name='RelationFeats')
         
         attention_map = tf.nn.sigmoid(relation_feats,'AttentionMap') # use sigmoid so it represents a heatmap of attention

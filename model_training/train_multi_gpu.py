@@ -765,7 +765,7 @@ class Model_Trainer():
         ckpt_file = self.ckpt_file
         init_op = tf.global_variables_initializer()
 
-        model_saver = tf.train.Saver(max_to_keep=15)
+        model_saver = tf.train.Saver(max_to_keep=20)
         self.model_saver = model_saver
         logging.info('Saving model to %s' % self.saver_path)
 
@@ -843,8 +843,10 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
+            #lr_max = 0.02
+            #lr_min = 0.0001
             lr_max = 0.02
-            lr_min = 0.0001
+            lr_min = 0.002
             reset_interval = 10
             self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * g_step/reset_interval))
             logging.info('Current learning rate is %f' % self.current_learning_rate)
@@ -1014,6 +1016,17 @@ class Model_Trainer():
 
             # Run training
             out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+            ## visualize the augmentation
+            #srois = out_dict['shifted_rois'] 
+            #aseqs = out_dict['augmented_seq']
+            #center_img = aseqs[0, 16, :,:,:]
+            #bbox_coords = srois * 400
+            #for bbox_coord in bbox_coords:
+            #    top,left,bottom,right = bbox_coord
+            #    cv2.rectangle(center_img, (left,top), (right,bottom), (255,0,0))
+            #cv2.imwrite('rois.jpg', center_img)
+            #import pdb;pdb.set_trace()
+
             if GENERATE_ATTN_MAPS:
                 roi_probs = out_dict['pred_probs']
                 for nnn in range(out_dict['no_dets'][0]):
@@ -1252,7 +1265,11 @@ def custom_loader(sess, ckpt_file):
     var_map = {}
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
-        if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "RoiEmbedding" not in variable.name: # for jhmdb
+        if "RelationFeats" not in variable.name: # for jhmdb
+         if 'Embedding' not in variable.name:
+          if "global_step" not in variable.name: # for jhmdb
         #if "Adam" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
