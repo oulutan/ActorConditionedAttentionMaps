@@ -223,6 +223,7 @@ class Model_Trainer():
         # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
         #                                 cycle_length=10, block_length=1)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
         dataset = dataset.shuffle(self.batch_size * self.no_gpus * 20)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
@@ -291,6 +292,7 @@ class Model_Trainer():
                 dataset = dataset.map(dataset_ava.get_tfrecord_test,
                         num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         self.validation_dataset = dataset
@@ -811,10 +813,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                model_saver.restore(sess, ckpt_file)
-                logging.info('Loading model checkpoint from: ' + ckpt_file)
-                #custom_loader(sess,ckpt_file)
-                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                #model_saver.restore(sess, ckpt_file)
+                #logging.info('Loading model checkpoint from: ' + ckpt_file)
+                custom_loader(sess,ckpt_file)
+                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)

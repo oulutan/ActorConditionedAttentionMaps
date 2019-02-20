@@ -10,6 +10,7 @@ import numpy as np
 import json
 import cv2
 import imageio
+import tensorflow as tf
  
 from sklearn.metrics import average_precision_score
 # import models.extra_layers as extra_layers
@@ -128,6 +129,10 @@ def get_val_list():
         val_segments.extend(val_vids)
     return val_segments
 
+## filters samples with no detected people!!!!
+def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key):
+    rois_bool = tf.cast(rois_np, tf.bool)
+    return tf.reduce_any(rois_bool)
 
 def get_data(segment_key, split):
     
