@@ -498,6 +498,10 @@ class Model_Trainer():
 
         logging.info('I3D end point is %s' % end_point)
 
+        # get slow seq first
+        slow_seq = cur_input_seq[:,3::8,:,:,:]
+        cur_input_seq = slow_seq
+
         
         augmented_sequence, augmented_rois = input_augmentation.augment_input_sequences(cur_input_seq, cur_rois)
         self.original_seq = cur_input_seq
