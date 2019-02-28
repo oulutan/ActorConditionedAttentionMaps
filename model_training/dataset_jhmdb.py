@@ -85,6 +85,9 @@ ANNOTATIONS_FILE = DATA_FOLDER + 'segment_annotations.json'
 with open(ANNOTATIONS_FILE) as fp:
     ANNOTATIONS = json.load(fp)
 
+def process_evaluation_results(res_name):
+    print("Results for %s "% res_name)
+
 
 # during training a frame will be randomly selected so 
 # add the total no of frames as the current frame
@@ -153,21 +156,25 @@ def get_video_frames(segment_key, split):
     
 
     vid_path = os.path.join(VIDEOS_FOLDER, action, vidname)
-    video = imageio.get_reader(vid_path, 'ffmpeg')
+    try: 
+        video = imageio.get_reader(vid_path, 'ffmpeg')
 
-    sample = np.zeros([INPUT_T, INPUT_H, INPUT_W, 3], np.uint8)
+        sample = np.zeros([INPUT_T, INPUT_H, INPUT_W, 3], np.uint8)
 
-    for ii in range(INPUT_T):
-        cur_frame_idx = center_frame - INPUT_T // 2 + ii
-        if cur_frame_idx < 0 or cur_frame_idx >= ANNOTATIONS[vidname]['nframes'] :
-            continue
-        else:
-            frame = video.get_data(cur_frame_idx)
-            # frame = frame[:,:,::-1] #opencv reads bgr, i3d trained with rgb
-            reshaped = cv2.resize(frame, (INPUT_W, INPUT_H))
-            sample[ii,:,:,:] = reshaped
+        for ii in range(INPUT_T):
+            cur_frame_idx = center_frame - INPUT_T // 2 + ii
+            if cur_frame_idx < 0 or cur_frame_idx >= ANNOTATIONS[vidname]['nframes'] :
+                continue
+            else:
+                frame = video.get_data(cur_frame_idx)
+                # frame = frame[:,:,::-1] #opencv reads bgr, i3d trained with rgb
+                reshaped = cv2.resize(frame, (INPUT_W, INPUT_H))
+                sample[ii,:,:,:] = reshaped
 
-    video.close()
+        video.close()
+    except IOError: 
+        sample = np.zeros([INPUT_T, INPUT_H, INPUT_W, 3], np.uint8)
+        print("IO ERROR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
 
     return sample.astype(np.float32), center_frame
 
