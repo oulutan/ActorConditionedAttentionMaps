@@ -1272,9 +1272,9 @@ def custom_loader(sess, ckpt_file):
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
         #if "CLS_Logits" not in variable.name: # for jhmdb
-        #if "RoiEmbedding" not in variable.name: # for jhmdb
-        if "RelationFeats" not in variable.name: # for jhmdb
-         if 'Embedding' not in variable.name:
+        if "RoiEmbedding" not in variable.name: # for jhmdb
+        #if "RelationFeats" not in variable.name: # for jhmdb
+        # if 'Embedding' not in variable.name:
           if "global_step" not in variable.name: # for jhmdb
         #if "Adam" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
