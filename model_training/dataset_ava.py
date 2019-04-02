@@ -154,7 +154,7 @@ def get_data(segment_key, split):
 import tensorflow as tf
 
 ## filters samples with no detected people!!!!
-def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key, poses_np):
+def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key):
     rois_bool = tf.cast(rois_np, tf.bool)
     return tf.reduce_any(rois_bool)
 
