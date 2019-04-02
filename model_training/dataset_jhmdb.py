@@ -51,6 +51,11 @@ MAX_ROIS = 100
 MAX_ROIS_IN_TRAINING = 20
 
 
+# jhmdb learning rates for cosine
+# lr_max = 0.001
+# lr_min = 0.0001
+
+
 ALL_VIDS_FILE = DATA_FOLDER + 'all_vids.txt'
 with open(ALL_VIDS_FILE) as fp:
     ALL_VIDS = fp.readlines()
