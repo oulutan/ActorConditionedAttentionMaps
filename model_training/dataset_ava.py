@@ -70,27 +70,28 @@ ANN2TRAIN = LABEL_CONVERSIONS['ann2train']
 TRAIN2ANN = LABEL_CONVERSIONS['train2ann']
  
 _split = 'train'
-annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % _split
+annotations_path = DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
 with open(annotations_path) as fp:
     ANNOS_TRAIN = json.load(fp)
  
 _split = 'val'
-annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % _split
+annotations_path = DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
 with open(annotations_path) as fp:
     ANNOS_VAL = json.load(fp)
  
 
 _split = 'test'
-annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % _split
+annotations_path = DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
 with open(annotations_path) as fp:
     ANNOS_TEST = json.load(fp)
 
 def get_train_list():
-    # with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
-    with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
-        train_detection_segments = json.load(fp)
+    return ANNOS_TRAIN.keys()
+    ## with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
+    #with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
+    #    train_detection_segments = json.load(fp)
 
-    return train_detection_segments
+    #return train_detection_segments
     #detected_set = set(train_detection_segments)
     ## if we want to focus on some classes
     #with open(DATA_FOLDER + 'action_lists_train.json') as fp:
@@ -110,9 +111,10 @@ def get_train_list():
 
  
 def get_val_list():
-    with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
-        val_detection_segments = json.load(fp)
-    return val_detection_segments
+    return ANNOS_VAL.keys()
+    # with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
+    #     val_detection_segments = json.load(fp)
+    # return val_detection_segments
     #detected_set = set(val_detection_segments)
     ## if we want to focus on some classes
     #with open(DATA_FOLDER + 'action_lists_val.json') as fp:
@@ -131,9 +133,10 @@ def get_val_list():
     #return filtered_segments
 
 def get_test_list():
-    with open(DATA_FOLDER + 'segment_keys_test_detections_only.json') as fp:
-        test_detection_segments = json.load(fp)
-    return test_detection_segments
+    return ANNOS_TEST.keys()
+    # with open(DATA_FOLDER + 'segment_keys_test_detections_only.json') as fp:
+    #     test_detection_segments = json.load(fp)
+    # return test_detection_segments
 
  
 
