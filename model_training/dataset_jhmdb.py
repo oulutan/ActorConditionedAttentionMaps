@@ -19,8 +19,10 @@ from sklearn.metrics import average_precision_score
 ## During training randomly select a midframe and just use its bbox
 # during eval, evaluate for every frame in the video. 
 
-INPUT_H = 400
-INPUT_W = 400
+#INPUT_H = 400
+#INPUT_W = 400
+INPUT_H = 240
+INPUT_W = 320
 INPUT_T = 32
 # INPUT_T = 16
  
@@ -37,7 +39,8 @@ OBJECT_DETECTIONS_FOLDER = JHMDB_FOLDER + '/objects/'
 DATA_FOLDER = JHMDB_FOLDER + '/data/'
 SPLIT_INFO_FOLDER = JHMDB_FOLDER + '/splits/'
 
-SPLIT_NO = 1
+#SPLIT_NO = 1
+SPLIT_NO = 3
 
 MODEL_SAVER_PATH = JHMDB_FOLDER + '/ckpts/split_%i_model_ckpt' % SPLIT_NO
 RESULT_SAVE_PATH = JHMDB_FOLDER + '/ActionResults/split_%i' % SPLIT_NO
@@ -46,6 +49,11 @@ RESULT_SAVE_PATH = JHMDB_FOLDER + '/ActionResults/split_%i' % SPLIT_NO
 # this initializes the roi vector sizes as well
 MAX_ROIS = 100
 MAX_ROIS_IN_TRAINING = 20
+
+
+# jhmdb learning rates for cosine
+# lr_max = 0.001
+# lr_min = 0.0001
 
 
 ALL_VIDS_FILE = DATA_FOLDER + 'all_vids.txt'
@@ -168,7 +176,8 @@ def get_video_frames(segment_key, split):
             else:
                 frame = video.get_data(cur_frame_idx)
                 # frame = frame[:,:,::-1] #opencv reads bgr, i3d trained with rgb
-                reshaped = cv2.resize(frame, (INPUT_W, INPUT_H))
+                #reshaped = cv2.resize(frame, (INPUT_W, INPUT_H))
+                reshaped = frame
                 sample[ii,:,:,:] = reshaped
 
         video.close()
