@@ -154,7 +154,7 @@ def get_data(segment_key, split):
 import tensorflow as tf
 
 ## filters samples with no detected people!!!!
-def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key, poses_np):
+def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key):
     rois_bool = tf.cast(rois_np, tf.bool)
     return tf.reduce_any(rois_bool)
 
@@ -537,6 +537,15 @@ def process_evaluation_results( res_name):
     logging.info('Done!')
 
 
+def process_evaluation_results_v2( res_name):
+    
+    logging.info('Generating ava style results')
+    subprocess.call(['python', ACAM_FOLDER + '/model_training/result_validation_v2.py', '--result_name', res_name])
+    
+    logging.info('Calculating final AP values')
+    subprocess.call(['bash', ACAM_FOLDER + '/evaluation/run_ava_detection.sh', res_name])
+    
+    logging.info('Done!')
 
 # Testing functions
 def _test_dataset_cropping():
