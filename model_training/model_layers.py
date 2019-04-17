@@ -21,6 +21,8 @@ def choose_roi_architecture(architecture_str, features, shifted_rois, cur_b_idx,
         class_feats =  non_local_ROI_feat_attention_model(box_features, features, cur_b_idx)
     elif  architecture_str == 'soft_attn':
         class_feats =  soft_roi_attention_model(features, shifted_rois, cur_b_idx, is_training)
+    elif architecture_str == 'double_tail_soft':
+        class_feats = double_tail_soft_attention_model(features, shifted_rois, cur_b_idx, is_training)
     elif  architecture_str == 'acrn_roi':
         class_feats =  acrn_roi_model(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
     elif  architecture_str == 'single_attn':
@@ -84,6 +86,21 @@ def i3d_tail_model(roi_box_features, is_training):
         
 
     return flat_feats
+
+def only_i3d_tail_model(roi_box_features, is_training):
+    # I3D continued after mixed4e
+    # with tf.variable_scope('Tail_I3D'):
+    if True:
+        tail_end_point = 'Mixed_5c'
+        # tail_end_point = 'Mixed_4f'
+        final_i3d_feat, end_points = i3d_model.i3d_tail(roi_box_features, is_training, tail_end_point)
+        # final_i3d_feat = end_points[tail_end_point]
+        tf.add_to_collection('final_i3d_feats', final_i3d_feat)
+        
+        
+        
+
+    return final_i3d_feat
 
 def non_local_ROI_model(roi_box_features, context_features, cur_b_idx, is_training):
     '''
@@ -218,13 +235,16 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
         roi_box_features = temporal_roi_cropping(context_features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
         R = tf.shape(shifted_rois)[0]
 
-        flat_box_feats = basic_model_pooled(roi_box_features)
+        #flat_box_feats = basic_model_pooled(roi_box_features)
+        flat_box_feats = basic_model(roi_box_features)
         roi_embedding = tf.layers.dense(flat_box_feats, 
                                         feature_map_channel, 
                                         activation=tf.nn.relu,
                                         kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                        use_bias=True,
                                         name='RoiEmbedding')
         roi_embedding = tf.layers.dropout(inputs=roi_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
+        #roi_embedding = tf.layers.batch_normalization(roi_embedding, training=is_training, name="RoI_BN")
 
         context_embedding = tf.layers.conv3d(context_features, 
                                             filters=feature_map_channel, 
@@ -232,8 +252,10 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
                                             padding='SAME', 
                                             activation=tf.nn.relu, 
                                             kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                            use_bias=True,
                                             name='ContextEmbedding')
         context_embedding =  tf.layers.dropout(inputs=context_embedding, rate=0.5, training=is_training, name='Context_Dropout')
+        #context_embedding = tf.layers.batch_normalization(context_embedding, training=is_training, name="Context_BN")
 
         # roi_embedding = tf.layers.dropout(inputs=flat_box_feats, rate=0.5, training=is_training, name='RoI_Dropout')
         # context_embedding =  tf.layers.dropout(inputs=context_features, rate=0.5, training=is_training, name='Context_Dropout')
@@ -268,6 +290,77 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
 
     class_feats = i3d_tail_model(soft_attention_feats, is_training)
     return class_feats
+
+def double_tail_soft_attention_model(context_features, shifted_rois, cur_b_idx, is_training):
+    #with tf.variable_scope('Soft_Attention_Model'):
+
+    _, Tc, Hc, Wc, Cc = context_features.shape.as_list()
+    B = tf.shape(context_features)[0]
+    feature_map_channel = Cc / 4
+
+    roi_box_features = temporal_roi_cropping(context_features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
+    R = tf.shape(shifted_rois)[0]
+
+    with tf.variable_scope('Tail_I3D'):
+        roi_tail = only_i3d_tail_model(roi_box_features, is_training )
+    flat_box_feats = basic_model_pooled(roi_tail)
+    #flat_box_feats = basic_model(roi_tail)
+    roi_embedding = tf.layers.dense(flat_box_feats, 
+                                    feature_map_channel, 
+                                    activation=tf.nn.relu,
+                                    kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                    use_bias=True,
+                                    name='RoiEmbedding')
+    roi_embedding = tf.layers.dropout(inputs=roi_embedding, rate=0.5, training=is_training, name='RoI_Dropout')
+    #roi_embedding = tf.layers.batch_normalization(roi_embedding, training=is_training, name="RoI_BN")
+
+    with tf.variable_scope('Soft_Attention_Model'):
+        context_embedding = tf.layers.conv3d(context_features, 
+                                            filters=feature_map_channel, 
+                                            kernel_size=[1,1,1], 
+                                            padding='SAME', 
+                                            activation=tf.nn.relu, 
+                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                            use_bias=True,
+                                            name='ContextEmbedding')
+        context_embedding =  tf.layers.dropout(inputs=context_embedding, rate=0.5, training=is_training, name='Context_Dropout')
+        #context_embedding = tf.layers.batch_normalization(context_embedding, training=is_training, name="Context_BN")
+
+        # roi_embedding = tf.layers.dropout(inputs=flat_box_feats, rate=0.5, training=is_training, name='RoI_Dropout')
+        # context_embedding =  tf.layers.dropout(inputs=context_features, rate=0.5, training=is_training, name='Context_Dropout')
+        
+        # with tf.device('/cpu:0'):
+        roi_expanded = tf.expand_dims(tf.expand_dims(tf.expand_dims(roi_embedding, axis=1), axis=1), axis=1) # R,512 -> R,1,1,1,512
+        roi_tiled = tf.tile(roi_expanded, [1,Tc,Hc,Wc,1], 'RoiTiling')
+
+        # multiply context_feats by no of rois so we can concatenate
+        context_embedding_gathered = tf.gather(context_embedding, cur_b_idx, axis=0, name='ContextEmbGather')
+
+        roi_context_feats = tf.concat([roi_tiled, context_embedding_gathered], 4, name='RoiContextConcat')
+
+        relation_feats = tf.layers.conv3d(  roi_context_feats, 
+                                            filters=Cc, 
+                                            kernel_size=[1,1,1], 
+                                            padding='SAME', 
+                                            activation=None, 
+                                            kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01),
+                                            name='RelationFeats')
+        
+        attention_map = tf.nn.sigmoid(relation_feats,'AttentionMap') # use sigmoid so it represents a heatmap of attention
+        # heatmap of attention
+        tf.add_to_collection('attention_map', attention_map) # for attn map generation
+        
+        # with tf.device('/cpu:0'):
+        # Multiply attention map with context features. Now this new feature represents the roi
+        gathered_context = tf.gather(context_features, cur_b_idx, axis=0, name='ContextGather')
+        tf.add_to_collection('feature_activations', gathered_context) # for attn map generation
+        soft_attention_feats = tf.multiply(attention_map, gathered_context)
+    
+
+    with tf.variable_scope('Tail_I3D', reuse=True):
+        class_feats = only_i3d_tail_model(soft_attention_feats, is_training)
+        flat_feats = basic_model_pooled(class_feats)
+    return flat_feats
     # with tf.variable_scope('Tail_I3D'):
     #     tail_end_point = 'Mixed_5c'
     #     # tail_end_point = 'Mixed_4f'

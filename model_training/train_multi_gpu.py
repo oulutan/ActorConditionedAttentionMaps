@@ -455,6 +455,7 @@ class Model_Trainer():
 
         logging.info('Not Updating batchnorm')
         # bn_layers_to_update = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        # import pdb;pdb.set_trace()
         # if bn_layers_to_update: 
         #    logging.info('Updating batchnorm')
         #    with tf.control_dependencies(bn_layers_to_update):
@@ -813,10 +814,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                #model_saver.restore(sess, ckpt_file)
-                #logging.info('Loading model checkpoint from: ' + ckpt_file)
-                custom_loader(sess,ckpt_file)
-                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                model_saver.restore(sess, ckpt_file)
+                logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
@@ -1268,11 +1269,13 @@ def custom_loader(sess, ckpt_file):
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
         #if "CLS_Logits" not in variable.name: # for jhmdb
-        #if "RoiEmbedding" not in variable.name: # for jhmdb
-        if "RelationFeats" not in variable.name: # for jhmdb
-         if 'Embedding' not in variable.name:
-          if "global_step" not in variable.name: # for jhmdb
+        if "RoiEmbedding" not in variable.name: # for jhmdb
+        #if "RelationFeats" not in variable.name: # for jhmdb
+        # if 'Embedding' not in variable.name:
+        #  if "global_step" not in variable.name: # for jhmdb
         #if "Adam" not in variable.name: # for jhmdb
+        #if "_BN" not in variable.name: # for jhmdb
+          if "global_step" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')
