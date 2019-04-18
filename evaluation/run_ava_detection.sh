@@ -1,7 +1,7 @@
 #python -O $AVA_DIR/evaluation/ActivityNet/Evaluation/get_ava_performance.py \
 export PYTHONPATH=$PYTHONPATH:$ACAM_DIR/evaluation/ActivityNet/Evaluation
 python -O $ACAM_DIR/evaluation/get_ava_performance_custom.py \
-  -l $ACAM_DIR/data/AVA/annotations/ava_action_list_v2.2_for_activitynet_2019.pbtxt.txt \
+  -l $ACAM_DIR/data/AVA/annotations/ava_action_list_v2.2_for_activitynet_2019.pbtxt \
   -g $ACAM_DIR/data/AVA/annotations/ava_val_v2.2.csv \
   -e $ACAM_DIR/data/AVA/annotations/ava_val_excluded_timestamps_v2.2.csv \
   -d $ACAM_DIR/data/AVA/ava_style_results/$1.csv

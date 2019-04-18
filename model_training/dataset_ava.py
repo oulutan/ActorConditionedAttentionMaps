@@ -43,7 +43,8 @@ RESULT_SAVE_PATH = AVA_FOLDER + '/ActionResults/'
  
 # max amount of rois in a single image
 # this initializes the roi vector sizes as well
-MAX_ROIS = 100
+#MAX_ROIS = 100
+MAX_ROIS = 50
 # TEMP_RESOLUTION = 32
 
 USE_GROUND_TRUTH_BOXES = False
@@ -86,7 +87,9 @@ with open(annotations_path) as fp:
     ANNOS_TEST = json.load(fp)
 
 def get_train_list():
-    return ANNOS_TRAIN.keys()
+    samples = ANNOS_TRAIN.keys()
+    samples.sort()
+    return  samples  
     ## with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
     #with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
     #    train_detection_segments = json.load(fp)
@@ -111,7 +114,9 @@ def get_train_list():
 
  
 def get_val_list():
-    return ANNOS_VAL.keys()
+    samples = ANNOS_VAL.keys()
+    samples.sort()
+    return  samples  
     # with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
     #     val_detection_segments = json.load(fp)
     # return val_detection_segments
@@ -133,7 +138,9 @@ def get_val_list():
     #return filtered_segments
 
 def get_test_list():
-    return ANNOS_TEST.keys()
+    samples = ANNOS_TEST.keys()
+    samples.sort()
+    return  samples  
     # with open(DATA_FOLDER + 'segment_keys_test_detections_only.json') as fp:
     #     test_detection_segments = json.load(fp)
     # return test_detection_segments
@@ -421,6 +428,11 @@ def get_obj_detection_results(segment_key,split):
         if len(detections) > MAX_ROIS_IN_TRAINING:
             # they are sorted by confidence already, take top #k
             detections = detections[:MAX_ROIS_IN_TRAINING]
+    else:
+        if len(detections) > MAX_ROIS:
+            # they are sorted by confidence already, take top #k
+            detections = detections[:MAX_ROIS]
+        
 
     # just so I can use these in get_tracker
     # detections[0]['height'] = H 
