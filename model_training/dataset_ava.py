@@ -541,7 +541,7 @@ def IoU_box(box1, box2):
     return IoU
   
 
-def process_evaluation_results( res_name):
+def process_evaluation_results_old( res_name):
     
     logging.info('Generating ava style results')
     subprocess.call(['python', ACAM_FOLDER + '/model_training/result_validation.py', '--result_name', res_name])
@@ -552,7 +552,7 @@ def process_evaluation_results( res_name):
     logging.info('Done!')
 
 
-def process_evaluation_results_v2( res_name):
+def process_evaluation_results( res_name):
     
     logging.info('Generating ava style results')
     subprocess.call(['python', ACAM_FOLDER + '/model_training/result_validation_v2.py', '--result_name', res_name])
