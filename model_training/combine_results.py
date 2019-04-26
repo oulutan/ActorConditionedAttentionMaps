@@ -1,0 +1,80 @@
+import json
+import os
+import numpy as np
+
+
+
+def read_serialized_results(file_path):
+    with open(file_path) as fp:
+        data = json.load(fp)
+    return data
+
+def save_serialized_list(input_list, file_path):
+    with open(file_path, 'w') as fp:
+        json.dump(input_list, fp)
+
+RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180"
+RES2 = "VALIDATION_Results_soft_attn_ava22filteredclasses_195"
+
+ACAM_FOLDER = os.environ['ACAM_DIR']
+AVA_FOLDER = ACAM_FOLDER + '/data/AVA'
+RESULTS_FOLDER = AVA_FOLDER + '/ActionResults/'
+
+results_path1 = RESULTS_FOLDER + '%s.txt' % RES1
+results_path2 = RESULTS_FOLDER + '%s.txt' % RES2
+
+allres1 = read_serialized_results(results_path1)
+allres2 = read_serialized_results(results_path2)
+
+
+minidx = np.argmin([len(allres1), len(allres2)])
+
+longres = [allres1, allres2][1-minidx]
+shortres = [allres1, allres2][minidx]
+
+# make a dict out of shortres
+shortdict = {}
+print("Making shortdict")
+for result in shortres:
+    cur_key = result[0]
+    cur_video_id, cur_timestamp = cur_key.split('.')
+    cur_roi_id = result[1]
+    cur_truths = result[2]
+    cur_preds = result[3]
+
+    dkey = "%s_%i" % (cur_key, cur_roi_id)
+
+    shortdict[dkey] = cur_preds
+
+
+# go thorugh longres and find if shortres has same datapoints
+#combined_res = []
+print("Iterating longres")
+for result in longres:
+    cur_key = result[0]
+    cur_video_id, cur_timestamp = cur_key.split('.')
+    cur_roi_id = result[1]
+    cur_truths = result[2]
+    cur_preds = result[3]
+
+    dkey = "%s_%i" % (cur_key, cur_roi_id)
+
+    if dkey in shortdict:
+        short_preds = shortdict[dkey]
+        longshort = np.stack([cur_preds, short_preds], axis=-1)
+        final_res = np.max(longshort, -1).tolist()
+        result[3] = final_res
+        #combined_res.append(final_res)
+
+final_name = RESULTS_FOLDER +  "%s_%s.txt" % (RES1, RES2)
+
+
+save_serialized_list(longres, final_name)
+
+print("%s written!" % final_name )
+
+
+
+import dataset_ava
+
+dataset_ava.process_evaluation_results("%s_%s" % (RES1, RES2))
