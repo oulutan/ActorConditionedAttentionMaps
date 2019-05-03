@@ -286,6 +286,7 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
         gathered_context = tf.gather(context_features, cur_b_idx, axis=0, name='ContextGather')
         tf.add_to_collection('feature_activations', gathered_context) # for attn map generation
         soft_attention_feats = tf.multiply(attention_map, gathered_context)
+        # soft_attention_feats =  tf.layers.dropout(inputs=soft_attention_feats, rate=0.5, training=is_training, name='ACAM_Dropout')
     
 
     class_feats = i3d_tail_model(soft_attention_feats, is_training)

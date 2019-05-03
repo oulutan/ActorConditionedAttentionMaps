@@ -14,7 +14,21 @@ def save_serialized_list(input_list, file_path):
         json.dump(input_list, fp)
 
 RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180"
-RES2 = "VALIDATION_Results_soft_attn_ava22filteredclasses_195"
+RES2 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_179"
+#RES1 = "TEST_Results_soft_attn_ava22_lowlr_finetuned_180"
+#RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180_VALIDATION_Results_soft_attn_less1000filtered_220"
+#RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180_VALIDATION_Results_soft_attn_less1000filtered_220_VALIDATION_Results_soft_attn_1000_3000filtered_181"
+#RES2 = "VALIDATION_Results_soft_attn_less1000filtered_220"
+#RES2 = "VALIDATION_Results_soft_attn_1000_3000filtered_181"
+#RES2 = "VALIDATION_Results_soft_attn_ava22filteredclasses_195"
+#RES2 = "VALIDATION_Results_soft_attn_filteredclasses_196"
+#RES2 = "VALIDATION_Results_soft_attn_filteredclasses_236"
+#RES2 = "VALIDATION_Results_soft_attn_filtered_and_randomclasses_240"
+#RES2 = "TEST_Results_soft_attn_filtered_and_randomclasses_240"
+#RES2 = "VALIDATION_Results_soft_attn_filteredclasses_235"
+#RES2 = "VALIDATION_Results_soft_attn_1000_3000filtered_205"
+#RES2 = "VALIDATION_Results_soft_attn_less1000filtered_220"
+
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 AVA_FOLDER = ACAM_FOLDER + '/data/AVA'
@@ -49,8 +63,9 @@ for result in shortres:
 
 # go thorugh longres and find if shortres has same datapoints
 #combined_res = []
+shared_cnt = 0
 print("Iterating longres")
-for result in longres:
+for ii,result in enumerate(longres):
     cur_key = result[0]
     cur_video_id, cur_timestamp = cur_key.split('.')
     cur_roi_id = result[1]
@@ -60,11 +75,17 @@ for result in longres:
     dkey = "%s_%i" % (cur_key, cur_roi_id)
 
     if dkey in shortdict:
+        shared_cnt += 1
         short_preds = shortdict[dkey]
+        ## choose max
         longshort = np.stack([cur_preds, short_preds], axis=-1)
         final_res = np.max(longshort, -1).tolist()
         result[3] = final_res
-        #combined_res.append(final_res)
+        ## per class based
+        #for cid in [43, 22, 23, 28, 41, 5, 39, 15, 17, 37, 35]:
+        #    result[3][cid] = max(short_preds[cid], result[3][cid])
+
+print("%i / %i shared" % (shared_cnt, len(longres)))
 
 final_name = RESULTS_FOLDER +  "%s_%s.txt" % (RES1, RES2)
 

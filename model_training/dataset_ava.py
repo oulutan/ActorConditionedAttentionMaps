@@ -10,6 +10,7 @@ import numpy as np
 import json
 import cv2
 import imageio
+import random
 
 import logging
 import subprocess
@@ -86,10 +87,48 @@ annotations_path = DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
 with open(annotations_path) as fp:
     ANNOS_TEST = json.load(fp)
 
+with open(DATA_FOLDER + 'action_lists_train.json') as fp: 
+    TR_LISTS = json.load(fp)
+
+
+def filter_list_for_actions(annos, samples):
+    #actions_to_focus = ["point to (an object)", "turn (e.g., a screwdriver)", "hit (an object)", "work on a computer", "cut", "take a photo", "enter", "shoot", "jump/leap", "climb (e.g., a mountain)", "throw"]
+    actions_to_focus = ["point to (an object)"]
+    cls_nos = ANN2TRAIN.keys()
+
+    #tr_sizes = {ANN2TRAIN[cls_no_str]['class_str']: len(TR_LISTS[cls_no_str]) for cls_no_str in cls_nos}
+    #size_th = 1000
+    #actions_to_focus = [ANN2TRAIN[cls_no_str]['class_str'] for cls_no_str in cls_nos if len(TR_LISTS[cls_no_str])<size_th]
+    #actions_to_focus = [ANN2TRAIN[cls_no_str]['class_str'] for cls_no_str in cls_nos if len(TR_LISTS[cls_no_str])>1000 and len(TR_LISTS[cls_no_str])<3000  ]
+
+    print("Focusing on actions %s" % (','.join(actions_to_focus)))
+    actions_to_focus = set(actions_to_focus)
+    actions_ann_ids = []
+    for ann_id in ANN2TRAIN:
+        if ANN2TRAIN[ann_id]['class_str'] in actions_to_focus:
+            actions_ann_ids.append(ann_id)
+    
+    actions_ann_ids = set(actions_ann_ids)
+    new_sample_list = []
+    for sample in samples:
+      for box in annos[sample]:
+        for annotation_action in box['actions']:
+            if annotation_action in actions_ann_ids:
+                new_sample_list.append(sample)
+                break
+    # add some random samples 
+    random.seed(10)
+    random_samples = random.sample(samples, 1000)
+    new_sample_list.extend(random_samples)
+    
+    return new_sample_list
+        
+
 def get_train_list():
     samples = ANNOS_TRAIN.keys()
     samples.sort()
     return  samples  
+    #return filter_list_for_actions(ANNOS_TRAIN, samples)
     ## with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
     #with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
     #    train_detection_segments = json.load(fp)
@@ -117,6 +156,7 @@ def get_val_list():
     samples = ANNOS_VAL.keys()
     samples.sort()
     return  samples  
+    #return filter_list_for_actions(ANNOS_VAL, samples)
     # with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
     #     val_detection_segments = json.load(fp)
     # return val_detection_segments
@@ -408,7 +448,9 @@ def get_obj_detection_results(segment_key,split):
     # KEY_FRAME_INDEX = 2
     movie_key, timestamp = segment_key.split('.')
     ## object detection results
-    obj_detects_folder = AVA_FOLDER + '/objects/' + split + '/'
+    # obj_detects_folder = AVA_FOLDER + '/objects/' + split + '/'
+    # finetuned
+    obj_detects_folder = AVA_FOLDER + '/objects_finetuned_mrcnn/' + split + '/'
     ## ava detection results
     #obj_detects_folder = AVA_FOLDER + '/ava_trained_persons/' + split + '/object_detections/'
     segment_objects_path = os.path.join(obj_detects_folder, movie_key, '%s.json' %timestamp )

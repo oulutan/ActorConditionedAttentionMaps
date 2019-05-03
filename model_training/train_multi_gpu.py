@@ -29,9 +29,9 @@ import cv2
 DATE = time.strftime("%b-%d-time-%H-%M-%S") # Feb-10-time-7-36
 
 NUM_EPOCHS = 40
-TRAINING_ITERS = 5000
+#TRAINING_ITERS = 5000
 # TRAINING_ITERS = 1 # debug
-VALIDATION_ITERS = 5000 # not used while balanced_validation
+#VALIDATION_ITERS = 5000 # not used while balanced_validation
 # BATCH_SIZE = 6
 DEFAULT_BATCH_SIZE = 6
 
@@ -846,10 +846,12 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
+            lr_max = 0.0001
+            lr_min = 0.0001
+            #lr_max = 0.01
+            #lr_min = 0.01
             #lr_max = 0.02
-            #lr_min = 0.0001
-            lr_max = 0.02
-            lr_min = 0.002
+            #lr_min = 0.002
             reset_interval = 10
             self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * g_step/reset_interval))
             logging.info('Current learning rate is %f' % self.current_learning_rate)
@@ -967,24 +969,25 @@ class Model_Trainer():
         all_results = [] # each term is a list itself, first term is the vid path
 
         # Every epoch go through every sample
-        train_iters = len(self.train_detection_segments) // (self.batch_size * self.no_gpus)
+        train_iters = len(self.train_detection_segments) // (self.batch_size * self.no_gpus) + 1
+        val_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus) + 1
 
         ## validate on everything
         # val_iters = len(self.val_detection_segments) // (BATCH_SIZE * self.no_gpus)
         # num_iters = TRAINING_ITERS if training_flag else val_iters
 
         # just on a few initial samples
-        val_iters = VALIDATION_ITERS // (self.batch_size * self.no_gpus)
+        #val_iters = VALIDATION_ITERS // (self.batch_size * self.no_gpus)
         # num_iters = TRAINING_ITERS if training_flag else val_iters
         num_iters = train_iters if training_flag else val_iters
 
-        if not training_flag:
-            num_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus)
-            logging.info('Evaluating on balanced val subset')
-        if self.evaluate:
-            num_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus)
-            # num_iters = 20
-            logging.info('Evaluating on full validation set')
+        # if not training_flag:
+        #     num_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus)
+        #     logging.info('Evaluating on balanced val subset')
+        # if self.evaluate:
+        #     num_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus)
+        #     # num_iters = 20
+        #     logging.info('Evaluating on full validation set')
 
         # pbar = tqdm(total=len(data_prov.data_list)//BATCH_SIZE, ncols=100)
         pbar = tqdm(total=num_iters, ncols=100)
