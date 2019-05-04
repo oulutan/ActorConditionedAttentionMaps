@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 # import dataset_tf
 import dataset_ava
+import dataset_gestures
 import dataset_jhmdb
 import process_results
 import input_augmentation
@@ -59,7 +60,8 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [14, 14]
 BOX_CROP_SIZE = [10, 10]
 # BOX_CROP_SIZE = [7, 7]
-USE_TFRECORD = True
+#USE_TFRECORD = True
+USE_TFRECORD = False
 
 TRAIN_FULL_MODEL = True
 #TRAIN_FULL_MODEL = False
@@ -170,6 +172,8 @@ class Model_Trainer():
             self.dataset_fcn = dataset_ava
         elif dataset_str == 'jhmdb':
             self.dataset_fcn = dataset_jhmdb
+        elif dataset_str == 'gestures':
+            self.dataset_fcn = dataset_gestures
 
         self.base_learning_rate = base_learning_rate
         self.ckpt_file = ckpt_file
@@ -558,7 +562,7 @@ class Model_Trainer():
             fl_input_labels = tf.cast(input_labels, tf.float32)
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
             # pred_probs = tf.nn.softmax(logits)
-            if self.dataset_str == 'jhmdb':
+            if self.dataset_str == 'jhmdb' or self.dataset_str == 'gestures':
                 pred_probs = tf.nn.softmax(logits)
                 logging.info("Optimizing on Softmax Loss")
                 softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
@@ -690,6 +694,8 @@ class Model_Trainer():
             regu_constant = 1e-7
         elif self.dataset_str == "jhmdb":
             regu_constant = 1e-6
+        elif self.dataset_str == "gestures":
+            regu_constant = 1e-6
         # regu_constant = 1e-8
         # regu_constant = 0.
         regularizers = regu_constant * regularizers
@@ -813,10 +819,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                #model_saver.restore(sess, ckpt_file)
-                #logging.info('Loading model checkpoint from: ' + ckpt_file)
-                custom_loader(sess,ckpt_file)
-                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                model_saver.restore(sess, ckpt_file)
+                logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
@@ -847,8 +853,10 @@ class Model_Trainer():
             g_step = self.sess.run(self.global_step)
             #lr_max = 0.02
             #lr_min = 0.0001
-            lr_max = 0.02
-            lr_min = 0.002
+            #lr_max = 0.02
+            #lr_min = 0.002
+            lr_max = 0.001
+            lr_min = 0.0001
             reset_interval = 10
             self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * g_step/reset_interval))
             logging.info('Current learning rate is %f' % self.current_learning_rate)
@@ -1203,7 +1211,7 @@ class Model_Trainer():
         if not self.run_test:
             if self.dataset_str == 'ava':
                 class_AP_str = process_results.get_AP_str(all_results)
-            elif self.dataset_str == 'jhmdb':
+            elif self.dataset_str == 'jhmdb' or self.dataset_str == 'gestures':
                 class_AP_str = self.dataset_fcn.get_AP_str(all_results)
             else:
                 raise NotImplementedError
