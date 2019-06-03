@@ -210,10 +210,10 @@ class Model_Trainer():
                     tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         else:
-            tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments, 'train')
+            tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments)
             dataset = tf.data.TFRecordDataset(tfrecord_list)
             dataset = dataset.repeat()# repeat infinitely
-            dataset = dataset.map(dataset_ava.get_tfrecord_train, 
+            dataset = dataset.map(dataset_ava.get_tfrecord, 
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # repeat infinitely and shuffle with seed
         # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
@@ -280,16 +280,16 @@ class Model_Trainer():
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         else:
             if not self.run_test:
-                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'val')
+                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
                 dataset = tf.data.TFRecordDataset(tfrecord_list)
                 dataset = dataset.repeat()# repeat infinitely
-                dataset = dataset.map(dataset_ava.get_tfrecord_val, 
+                dataset = dataset.map(dataset_ava.get_tfrecord, 
                         num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
             else:
-                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments, 'test')
+                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
                 dataset = tf.data.TFRecordDataset(tfrecord_list)
                 dataset = dataset.repeat()# repeat infinitely
-                dataset = dataset.map(dataset_ava.get_tfrecord_test,
+                dataset = dataset.map(dataset_ava.get_tfrecord,
                         num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
@@ -846,8 +846,8 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
-            lr_max = 0.0001
-            lr_min = 0.0001
+            lr_max = 0.001
+            lr_min = 0.001
             #lr_max = 0.01
             #lr_min = 0.01
             #lr_max = 0.02
