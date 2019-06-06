@@ -13,8 +13,8 @@ def save_serialized_list(input_list, file_path):
     with open(file_path, 'w') as fp:
         json.dump(input_list, fp)
 
-RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180"
-RES2 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_179"
+#RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180"
+#RES2 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_179"
 #RES1 = "TEST_Results_soft_attn_ava22_lowlr_finetuned_180"
 #RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180_VALIDATION_Results_soft_attn_less1000filtered_220"
 #RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_180_VALIDATION_Results_soft_attn_less1000filtered_220_VALIDATION_Results_soft_attn_1000_3000filtered_181"
@@ -28,6 +28,10 @@ RES2 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_179"
 #RES2 = "VALIDATION_Results_soft_attn_filteredclasses_235"
 #RES2 = "VALIDATION_Results_soft_attn_1000_3000filtered_205"
 #RES2 = "VALIDATION_Results_soft_attn_less1000filtered_220"
+RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_194"
+#RES2 = "VALIDATION_Results_soft_attn_ava22_300x300_val_194"
+#RES2 = "VALIDATION_Results_soft_attn_ava22_200x200_val_194"
+RES2 = "VALIDATION_Results_soft_attn_ava22_500x500_val_194"
 
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
@@ -79,7 +83,8 @@ for ii,result in enumerate(longres):
         short_preds = shortdict[dkey]
         ## choose max
         longshort = np.stack([cur_preds, short_preds], axis=-1)
-        final_res = np.max(longshort, -1).tolist()
+        #final_res = np.max(longshort, -1).tolist()
+        final_res = np.mean(longshort, -1).tolist()
         result[3] = final_res
         ## per class based
         #for cid in [43, 22, 23, 28, 41, 5, 39, 15, 17, 37, 35]:

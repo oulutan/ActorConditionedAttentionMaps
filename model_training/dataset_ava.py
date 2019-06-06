@@ -19,6 +19,8 @@ import subprocess
  
 INPUT_H = 400
 INPUT_W = 400
+#INPUT_H = 500
+#INPUT_W = 500
 INPUT_T = 32
 # INPUT_T = 16
  
@@ -238,6 +240,9 @@ def get_tfrecord(serialized_example):
     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
     sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+
+    if INPUT_H != 400:
+        sample = tf.image.resize_images(sample, [INPUT_H, INPUT_W])
     
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
@@ -514,7 +519,7 @@ def get_obj_detection_results(segment_key,split):
     detections = [det for det in detections if det['class_str'] == 'person']
     # filter out detection confidences so that i can train efficiently
     if split == 'train':
-        detections = [det for det in detections if det['score'] > 0.90]
+        #detections = [det for det in detections if det['score'] > 0.90]
         if len(detections) > MAX_ROIS_IN_TRAINING:
             # they are sorted by confidence already, take top #k
             detections = detections[:MAX_ROIS_IN_TRAINING]
@@ -533,7 +538,7 @@ def get_obj_detection_results(segment_key,split):
     # detections = [{"box": [0.07, 0.006, 0.981, 0.317], "class_str": "person", "score": 0.979, "class_no": 1},
  
  
-MATCHING_IOU = 0.8
+MATCHING_IOU = 0.5
 def match_annos_with_detections(annotations, detections, split):
     gt_boxes = []
     for ann in annotations:
