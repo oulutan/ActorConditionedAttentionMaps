@@ -31,7 +31,8 @@ def save_serialized_list(input_list, file_path):
 RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_194"
 #RES2 = "VALIDATION_Results_soft_attn_ava22_300x300_val_194"
 #RES2 = "VALIDATION_Results_soft_attn_ava22_200x200_val_194"
-RES2 = "VALIDATION_Results_soft_attn_ava22_500x500_val_194"
+#RES2 = "VALIDATION_Results_soft_attn_ava22_500x500_val_194"
+RES2 = "VALIDATION_Results_soft_attn_ava22_centercrop_0_0001lr_195"
 
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
@@ -83,8 +84,8 @@ for ii,result in enumerate(longres):
         short_preds = shortdict[dkey]
         ## choose max
         longshort = np.stack([cur_preds, short_preds], axis=-1)
-        #final_res = np.max(longshort, -1).tolist()
-        final_res = np.mean(longshort, -1).tolist()
+        final_res = np.max(longshort, -1).tolist()
+        #final_res = np.mean(longshort, -1).tolist()
         result[3] = final_res
         ## per class based
         #for cid in [43, 22, 23, 28, 41, 5, 39, 15, 17, 37, 35]:

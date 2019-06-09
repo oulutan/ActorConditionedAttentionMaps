@@ -53,7 +53,10 @@ MAX_ROIS = 50
 USE_GROUND_TRUTH_BOXES = False
 
 MAX_ROIS_IN_TRAINING = 15
- 
+
+
+#UPDATE_FOR_CROPS = True
+UPDATE_FOR_CROPS = False
 # USE_TRACKER_TEMPORAL_ROIS = False
  
  
@@ -380,6 +383,7 @@ def generate_tfrecord_list(detection_segments):
     for segment_key in detection_segments:
         split = check_split(segment_key)
         records_path = os.path.join(TFRECORDS_FOLDER, split)
+        #records_path = os.path.join(TFRECORDS_FOLDER, split+"_v2")
         movie, segment = segment_key.split(".")
         t_path = os.path.join(records_path, movie, "%s.tfrecord" % segment)
         tfrecord_list.append(t_path)
@@ -489,7 +493,10 @@ def get_labels(segment_key,split):
     #     keyframe_detections, rois_np, no_det = get_tracker_rois(segment_key,split, obj_detections)
     #     labels_np, _, _ = match_annos_with_detections(sample_annotations, keyframe_detections, split)
 
-    detections = get_obj_detection_results(segment_key,split)
+    detections, H, W = get_obj_detection_results(segment_key,split)
+    if UPDATE_FOR_CROPS:
+        update_rois(detections, sample_annotations, H, W)
+    
     labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
      
     return labels_np, rois_np, no_det
@@ -531,10 +538,10 @@ def get_obj_detection_results(segment_key,split):
         
 
     # just so I can use these in get_tracker
-    # detections[0]['height'] = H 
-    # detections[0]['width'] = W
+    #detections[0]['height'] = H 
+    #detections[0]['width'] = W
     # detections[0]['frame_nos'] = results['frame_nos']
-    return detections
+    return detections, H, W
     # detections = [{"box": [0.07, 0.006, 0.981, 0.317], "class_str": "person", "score": 0.979, "class_no": 1},
  
  
@@ -635,6 +642,45 @@ def IoU_box(box1, box2):
      
     IoU = areaIntersection / float(area1 + area2 - areaIntersection)
     return IoU
+
+def update_rois(detections, sample_annotations, H, W):
+    #import pdb;pdb.set_trace()
+    for ann in sample_annotations:
+        left, top, right, bottom = ann['bbox']
+        ann['bbox'] = update_rois_with_crop(left,top, right, bottom,H,W)
+    for det in detections:
+        top, left, bottom, right = det['box']
+        uleft, utop, uright, ubottom = update_rois_with_crop(left,top, right, bottom,H,W)
+        det['box'] = [utop, uleft, ubottom, uright]
+
+def update_rois_with_crop(left, top, right, bottom, H, W, crop='center'):
+    dim = 400
+    multiplier = dim / float(min(H,W))
+    new_H, new_W = int(H*multiplier), int(W*multiplier)
+    #reshaped = cv2.resize(frame, (new_W,new_H))
+    h_diff = (new_H - dim) // 2
+    w_diff = (new_W - dim) // 2
+    #cropped = reshaped[h_diff:h_diff+dim, w_diff:w_diff+dim,:]
+    left_offset = w_diff / float(W)
+    right_offset = w_diff / float(W)
+    top_offset = h_diff / float(H)
+    bottom_offset = h_diff / float(H)
+    
+    left_crop = left_offset
+    right_crop = 1.0 - right_offset
+    top_crop = top_offset
+    bottom_crop = 1.0 - bottom_offset
+    
+    # update box_coords
+    #top, left, bottom, right = cur_rois[:,0], cur_rois[:,1], cur_rois[:,2], cur_rois[:,3]
+    updated_left   = (left - left_offset) / (1.0 - left_offset - right_offset)
+    updated_right  = (right - left_offset) / (1.0 - left_offset - right_offset)
+    
+    updated_top    = (top - top_offset) / (1.0 - top_offset - bottom_offset)
+    updated_bottom = (bottom - top_offset) / (1.0 - top_offset - bottom_offset)
+    return updated_left, updated_top, updated_right, updated_bottom
+    
+
   
 
 def process_evaluation_results_old( res_name):

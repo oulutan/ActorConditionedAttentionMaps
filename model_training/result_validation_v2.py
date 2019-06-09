@@ -225,7 +225,7 @@ def convert_results(all_results, split='val'):
         cur_preds = result[3]
 
         
-        detections = dataset_ava.get_obj_detection_results(cur_key, split)
+        detections, H, W = dataset_ava.get_obj_detection_results(cur_key, split)
         
         
         cur_detection = detections[cur_roi_id]

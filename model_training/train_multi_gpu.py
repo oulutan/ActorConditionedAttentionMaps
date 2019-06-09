@@ -600,10 +600,12 @@ class Model_Trainer():
 
             #per_roi_sigmoid_loss = tf.reduce_mean(sigmoid_loss, axis=1)
 
-            no_dets = tf.cast(no_dets, tf.int32)
-            total_no_of_detections = tf.reduce_sum(no_dets) # this is no_dets across all gpus
+            # no_dets = tf.cast(no_dets, tf.int32)
+            # total_no_of_detections = tf.reduce_sum(no_dets) # this is no_dets across all gpus
 
-            loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(total_no_of_detections, tf.float32)
+            # loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(total_no_of_detections, tf.float32)
+            
+            loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(self.batch_size * self.no_gpus, tf.float32)
 
             # # calculate the per RoI weight. We are doing this becuase we average on RoIs not samples
             # # I want each sample to have same weight compared to each RoI. Beacuse each samples can generated multiple roi proposals
@@ -846,8 +848,8 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
-            lr_max = 0.001
-            lr_min = 0.001
+            lr_max = 0.0001
+            lr_min = 0.0001
             #lr_max = 0.01
             #lr_min = 0.01
             #lr_max = 0.02
@@ -1022,15 +1024,19 @@ class Model_Trainer():
 
             # Run training
             out_dict = self.sess.run(run_dict, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
-            ## visualize the augmentation
+            ## visualize the augmentation DEBUG
             #srois = out_dict['shifted_rois'] 
             #aseqs = out_dict['augmented_seq']
+            #srois = out_dict['regular_rois'] 
+            #aseqs = out_dict['original_seq']
             #center_img = aseqs[0, 16, :,:,:]
             #bbox_coords = srois * 400
             #for bbox_coord in bbox_coords:
             #    top,left,bottom,right = bbox_coord
             #    cv2.rectangle(center_img, (left,top), (right,bottom), (255,0,0))
-            #cv2.imwrite('rois.jpg', center_img)
+            ##cv2.imwrite('rois.jpg', center_img)
+            #cv2.imshow('rois', np.uint8(center_img))
+            #cv2.waitKey(0)
             #import pdb;pdb.set_trace()
 
             if GENERATE_ATTN_MAPS:
