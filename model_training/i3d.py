@@ -92,6 +92,28 @@ def initialize_tail(sess, weights_path):
   else:
       print('Tail did not initialize anything')
   
+def initialize_slave_tail(sess, weights_path):
+  # weights_path = MAIN_FOLDER + '/model_training/models/weights/'
+  # path_to_weights = weights_path + 'i3d_rgb_imagenet/model.ckpt'
+  ## need var_map keys as this
+  # RGB/inception_i3d/Mixed_3c/Branch_2/Conv3d_0b_3x3/conv_3d/w
+
+  tail_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='slave_tail')
+
+  var_map = {}
+  for variable in tail_vars:
+     # if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
+     if 'Adam' not in variable.name:
+          map_name = variable.name.replace(':0', '')
+          map_name = map_name.replace('slave_tail/Tail_I3D', 'RGB/inception_i3d')
+          var_map[map_name] = variable
+  if var_map.keys():
+      tail_saver = tf.train.Saver(var_list=var_map, reshape=True)
+      tail_saver.restore(sess, weights_path)
+      print('Restored i3d tail weights from %s ' % weights_path)
+  else:
+      print('Tail did not initialize anything')
+
 def initialize_all_i3d_from_ckpt(sess, ckpt_file):
   head_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='RGB/inception_i3d')
   tail_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Tail_I3D')

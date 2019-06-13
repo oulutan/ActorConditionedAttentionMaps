@@ -32,7 +32,8 @@ RES1 = "VALIDATION_Results_soft_attn_ava22_lowlr_finetuned_194"
 #RES2 = "VALIDATION_Results_soft_attn_ava22_300x300_val_194"
 #RES2 = "VALIDATION_Results_soft_attn_ava22_200x200_val_194"
 #RES2 = "VALIDATION_Results_soft_attn_ava22_500x500_val_194"
-RES2 = "VALIDATION_Results_soft_attn_ava22_centercrop_0_0001lr_195"
+#RES2 = "VALIDATION_Results_soft_attn_ava22_centercrop_0_0001lr_195"
+RES2 = "VALIDATION_Results_soft_attn_ava22_twotails_199"
 
 
 ACAM_FOLDER = os.environ['ACAM_DIR']

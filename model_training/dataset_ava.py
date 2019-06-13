@@ -500,7 +500,45 @@ def get_labels(segment_key,split):
     labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
      
     return labels_np, rois_np, no_det
- 
+
+def hierarchical_action_filtering(annotations, is_master=True):
+    tail_action_classes = [
+            'point to (an object)'           ,
+            'swim'                           , 
+            'turn (e.g., a screwdriver)'     , 
+            'hit (an object)'                , 
+            'work on a computer'             , 
+            'cut'                            , 
+            'take a photo'                   , 
+            'enter'                          , 
+            'shoot'                          , 
+            'jump/leap'                      , 
+            'climb (e.g., a mountain)'       , 
+            'throw'                          , 
+            'fall down'                      , 
+            'dress/put on clothing'          , 
+            'hand wave'                      , 
+            'pull (an object)'               , 
+            'push (another person)'          , 
+            'lift (a person)'                , 
+            'push (an object)'               , 
+            'text on/look at a cellphone'    , 
+            'lift/pick up'                   , 
+            'put down'                       , 
+            'listen (e.g., to music)'        , 
+            'take (an object) from (a person)',
+            'hand shake'                      
+            ]
+    class_nos = []
+    if is_master:
+        for ann in annotations:
+            pass
+
+
+
+
+
+
 def get_obj_detection_results(segment_key,split):
     # split = sample_info['split']
     # segment_key = sample_info['segment_key']

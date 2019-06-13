@@ -159,7 +159,10 @@ def non_local_ROI_model(roi_box_features, context_features, cur_b_idx, is_traini
         final_i3d_feat, end_points = i3d_model.i3d_tail(residual_feature, is_training, tail_end_point)
     
     # classification
-    class_feats = basic_model(final_i3d_feat)
+    class_feats1 = basic_model(final_i3d_feat)
+    with tf.variable_scope('slave_tail'):
+        class_feats2 = basic_model(final_i3d_feat)
+    class_feats = tf.concat([class_feats1, class_feats2], axis=-1)
     return class_feats
 
 # def non_local_ROI_feat_attention_model(self, roi_box_features, context_features, cur_b_idx):
@@ -289,7 +292,10 @@ def soft_roi_attention_model(context_features, shifted_rois, cur_b_idx, is_train
         # soft_attention_feats =  tf.layers.dropout(inputs=soft_attention_feats, rate=0.5, training=is_training, name='ACAM_Dropout')
     
 
-    class_feats = i3d_tail_model(soft_attention_feats, is_training)
+    class_feats1 = i3d_tail_model(soft_attention_feats, is_training)
+    with tf.variable_scope('slave_tail'):
+        class_feats2 = i3d_tail_model(soft_attention_feats, is_training)
+    class_feats = tf.concat([class_feats1, class_feats2], axis=-1)
     return class_feats
 
 def double_tail_soft_attention_model(context_features, shifted_rois, cur_b_idx, is_training):

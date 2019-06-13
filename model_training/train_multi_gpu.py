@@ -534,18 +534,27 @@ class Model_Trainer():
         ## Args model selection
         logging.info('Using model architecture: %s' % self.architecture_str )
         class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training)
+        feat_shape = class_feats.shape[-1] / 2.
         
 
 
         logging.info('Using Dropout')
-        class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=0.4, training=self.is_training, name='CLS_DROP1')
-        logits = tf.layers.dense(inputs=class_feats_drop, 
+        class_feats_drop = tf.layers.dropout(inputs=class_feats[:,:feat_shape], rate=0.4, training=self.is_training, name='CLS_DROP1')
+        logits1 = tf.layers.dense(inputs=class_feats_drop, 
                                  units=self.dataset_fcn.NUM_CLASSES, 
                                  activation=None, 
                                  name='CLS_Logits', 
                                  kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
 
+        class_feats_drop2 = tf.layers.dropout(inputs=class_feats[:,feat_shape:], rate=0.4, training=self.is_training, name='CLS_DROP1')
+        logits2 = tf.layers.dense(inputs=class_feats_drop2, 
+                                 units=self.dataset_fcn.NUM_CLASSES, 
+                                 activation=None, 
+                                 name='CLS_Logits2', 
+                                 kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
         # logits = tf.layers.dense(inputs=class_feats, units=NUM_CLASSES, activation=None, name='CLS_Logits')
+
+        logits = tf.concat([logits1, logits2], axis=-1)
 
         return logits
 
@@ -555,6 +564,8 @@ class Model_Trainer():
         with tf.variable_scope('Losses'):
             input_labels = cur_labels
             logits = cur_logits
+            logits1 = logits[:,:60]
+            logits2 = logits[:,60:]
 
             fl_input_labels = tf.cast(input_labels, tf.float32)
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
@@ -568,18 +579,27 @@ class Model_Trainer():
             else:
             #if True:
             # In our case each logit is a probability itself
-                pred_probs = tf.nn.sigmoid(logits)
-                logging.info("Optimizing on Sigmoid X-Entropy loss! ")
-                sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
-                                                                logits=logits)
-                per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
-                #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
+                pred_probs1 = tf.nn.sigmoid(logits1)
+                pred_probs2 = tf.nn.sigmoid(logits2)
+                #logging.info("Optimizing on Sigmoid X-Entropy loss! ")
+                sigmoid_loss1 = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
+                                                                logits=logits1)
+                #per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
+                focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
                 #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(62,63) if str(action) in dataset_ava.ANN2TRAIN.keys()]#work on computer
-                #logging.info('ONLY FOCUSING ON FOLLOWING CLASSES')
-                #logging.info([dataset_ava.TRAIN2ANN[(str(cc))]['class_str'] for cc in focus_on_classes])
-                #class_filter = np.zeros([60])
-                #class_filter[np.array(focus_on_classes)] = 1.
-                #per_roi_loss = tf.reduce_sum(sigmoid_loss*class_filter, axis=1) / tf.cast(tf.reduce_sum(class_filter), tf.float32)
+                logging.info('ONLY FOCUSING ON FOLLOWING CLASSES')
+                logging.info([dataset_ava.TRAIN2ANN[(str(cc))]['class_str'] for cc in focus_on_classes])
+                class_filter = np.zeros([60])
+                class_filter[np.array(focus_on_classes)] = 1.
+                per_roi_loss1 = tf.reduce_sum(sigmoid_loss1*class_filter, axis=1) / tf.cast(tf.reduce_sum(class_filter), tf.float32)
+                
+                
+                sigmoid_loss2 = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
+                                                                logits=logits2)
+                per_roi_loss2 = tf.reduce_sum(sigmoid_loss2*(1.-class_filter), axis=1) / tf.cast(tf.reduce_sum(1.-class_filter), tf.float32)
+                per_roi_loss = per_roi_loss1 + per_roi_loss2
+                pred_probs = pred_probs1 * class_filter + pred_probs2 * (1-class_filter)
+
             # loss_val = tf.reduce_mean(-tf.reduce_sum(tf.cast(input_labels, tf.float32) * tf.log(tf.clip_by_value(pred_probs, 1e-10, 1e10)), reduction_indices=[1]))
             pred_probs = tf.clip_by_value(pred_probs, 1e-5, 1.0 - 1e-5)
             # pred_probs = tf.Print(pred_probs, [pred_probs], 'pred_probs:')
@@ -600,12 +620,12 @@ class Model_Trainer():
 
             #per_roi_sigmoid_loss = tf.reduce_mean(sigmoid_loss, axis=1)
 
-            # no_dets = tf.cast(no_dets, tf.int32)
-            # total_no_of_detections = tf.reduce_sum(no_dets) # this is no_dets across all gpus
+            no_dets = tf.cast(no_dets, tf.int32)
+            total_no_of_detections = tf.reduce_sum(no_dets) # this is no_dets across all gpus
 
-            # loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(total_no_of_detections, tf.float32)
+            loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(total_no_of_detections, tf.float32)
             
-            loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(self.batch_size * self.no_gpus, tf.float32)
+            # loss_val = tf.reduce_sum(per_roi_loss) / tf.cast(self.batch_size * self.no_gpus, tf.float32)
 
             # # calculate the per RoI weight. We are doing this becuase we average on RoIs not samples
             # # I want each sample to have same weight compared to each RoI. Beacuse each samples can generated multiple roi proposals
@@ -806,6 +826,9 @@ class Model_Trainer():
         # Initialize the TAIL
         i3d.initialize_tail(sess, i3d_ckpt)
 
+        # Initialize slave tail
+        i3d.initialize_slave_tail(sess, i3d_ckpt)
+
         # Initialize I3D feature extractor
         # import pdb;pdb.set_trace()
         # self.initialize_i3d_extractor()
@@ -848,8 +871,8 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
-            lr_max = 0.0001
-            lr_min = 0.0001
+            lr_max = 0.01
+            lr_min = 0.01
             #lr_max = 0.01
             #lr_min = 0.01
             #lr_max = 0.02
@@ -1278,13 +1301,15 @@ def custom_loader(sess, ckpt_file):
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
         #if "CLS_Logits" not in variable.name: # for jhmdb
-        if "RoiEmbedding" not in variable.name: # for jhmdb
+        #if "RoiEmbedding" not in variable.name: # for jhmdb
         #if "RelationFeats" not in variable.name: # for jhmdb
         # if 'Embedding' not in variable.name:
         #  if "global_step" not in variable.name: # for jhmdb
         #if "Adam" not in variable.name: # for jhmdb
         #if "_BN" not in variable.name: # for jhmdb
-          if "global_step" not in variable.name: # for jhmdb
+        if "slave_tail" not in variable.name: # for jhmdb
+          if "CLS_Logits2" not in variable.name: # for jhmdb
+          #if "global_step" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')
