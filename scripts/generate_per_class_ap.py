@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 
 #res1_file = "VALIDATION_Results_soft_attn_23.json"
 #res1_file = "VALIDATION_Results_soft_attn_pooled_51.json"
-res1_file = "VALIDATION_Results_soft_attn_pooled_cosine_drop_170.json"
+#res1_file = "VALIDATION_Results_soft_attn_pooled_cosine_drop_170.json"
+res1_file = "VALIDATION_Results_ava21_notfinetuned_190.json"
 #res2_file = "VALIDATION_Results_soft_attn_23.json"
 res2_file = "VALIDATION_Results_basic_model_33.json"
 
