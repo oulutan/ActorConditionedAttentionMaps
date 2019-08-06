@@ -36,7 +36,8 @@ ACAM_FOLDER = os.environ['ACAM_DIR']
 
 AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
 SEGMENTS_FOLDER = AVA_FOLDER + '/segments/'
-TFRECORDS_FOLDER = AVA_FOLDER + '/tfrecords/'
+#TFRECORDS_FOLDER = AVA_FOLDER + '/tfrecords/'
+TFRECORDS_FOLDER = AVA_FOLDER + '/tfrecords_labels/'
 DATA_FOLDER = AVA_FOLDER + '/data/'
 
 # AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
@@ -83,6 +84,7 @@ with open(annotations_path) as fp:
  
 _split = 'val'
 annotations_path = DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
+#annotations_path = DATA_FOLDER + 'segment_annotations_v21_%s.json' % _split
 with open(annotations_path) as fp:
     ANNOS_VAL = json.load(fp)
  
@@ -98,7 +100,8 @@ with open(DATA_FOLDER + 'action_lists_train.json') as fp:
 
 def filter_list_for_actions(annos, samples):
     #actions_to_focus = ["point to (an object)", "turn (e.g., a screwdriver)", "hit (an object)", "work on a computer", "cut", "take a photo", "enter", "shoot", "jump/leap", "climb (e.g., a mountain)", "throw"]
-    actions_to_focus = ["point to (an object)"]
+    #actions_to_focus = ["point to (an object)"]
+    actions_to_focus = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)"]
     cls_nos = ANN2TRAIN.keys()
 
     #tr_sizes = {ANN2TRAIN[cls_no_str]['class_str']: len(TR_LISTS[cls_no_str]) for cls_no_str in cls_nos}
@@ -133,11 +136,11 @@ def get_train_list():
     samples = ANNOS_TRAIN.keys()
     samples.sort()
     return  samples  
+    #return filter_list_for_actions(ANNOS_TRAIN, samples)
     # train on both train+val
     #samples_val = ANNOS_VAL.keys()
     #samples_val.sort()
     #return samples + samples_val
-    #return filter_list_for_actions(ANNOS_TRAIN, samples)
     ## with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
     #with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
     #    train_detection_segments = json.load(fp)
@@ -217,7 +220,7 @@ def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key):
     rois_bool = tf.cast(rois_np, tf.bool)
     return tf.reduce_any(rois_bool)
 
-def get_tfrecord(serialized_example):
+def get_tfrecord_np(serialized_example):
     
     # Prepare feature list; read encoded JPG images as bytes
     features = dict()
@@ -250,6 +253,54 @@ def get_tfrecord(serialized_example):
     #label  = tf.cast(parsed_features["class_label"], tf.int64)
     #label = parsed_features['filename']
     labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment']], [ tf.int32, tf.float32, tf.int64, tf.string])
+    
+    
+    return sample, labels_np, rois_np, no_det, segment_key
+
+def get_tfrecord(serialized_example):
+    
+    # Prepare feature list; read encoded JPG images as bytes
+    features = dict()
+    #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+    features["frames"] = tf.VarLenFeature(tf.string)
+    features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+    #features["filename"] = tf.FixedLenFeature((), tf.string)
+    features['movie'] = tf.FixedLenFeature((), tf.string)
+    features['segment'] = tf.FixedLenFeature((), tf.string)
+
+
+    # tflabels
+    features['no_det'] = tf.FixedLenFeature((), tf.int64)
+    features['segment_key'] = tf.FixedLenFeature((), tf.string)
+    features['labels'] = tf.FixedLenFeature((MAX_ROIS,NUM_CLASSES), tf.int64)
+    features['rois'] = tf.FixedLenFeature((MAX_ROIS,4), tf.float32)
+
+    
+    # Parse into tensors
+    parsed_features = tf.parse_single_example(serialized_example, features)
+    
+    # Randomly sample offset from the valid range.
+    #random_offset = tf.random_uniform(
+    #    shape=(), minval=0,
+    #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+    
+    #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+    
+    # Decode the encoded JPG images
+    #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+    sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+    sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+
+    if INPUT_H != 400:
+        sample = tf.image.resize_images(sample, [INPUT_H, INPUT_W])
+    
+    #label  = tf.cast(parsed_features["class_label"], tf.int64)
+    #label = parsed_features['filename']
+    #labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment']], [ tf.int32, tf.float32, tf.int64, tf.string])
+    labels_np = tf.reshape(parsed_features['labels'], [MAX_ROIS, NUM_CLASSES])
+    rois_np = tf.reshape(parsed_features['rois'], [MAX_ROIS, 4])
+    no_det = parsed_features['no_det']
+    segment_key = parsed_features['segment_key']
     
     
     return sample, labels_np, rois_np, no_det, segment_key
@@ -508,7 +559,7 @@ def get_obj_detection_results(segment_key,split):
     # KEY_FRAME_INDEX = 2
     movie_key, timestamp = segment_key.split('.')
     ## object detection results
-    # obj_detects_folder = AVA_FOLDER + '/objects/' + split + '/'
+    #obj_detects_folder = AVA_FOLDER + '/objects/' + split + '/'
     # finetuned
     obj_detects_folder = AVA_FOLDER + '/objects_finetuned_mrcnn/' + split + '/'
     ## ava detection results

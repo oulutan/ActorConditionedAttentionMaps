@@ -472,7 +472,8 @@ class Model_Trainer():
         pred_probs = self.pred_probs
         input_labels = self.input_labels
 
-        preds = tf.cast(tf.greater_equal(pred_probs, 0.5), tf.int32)
+        #preds = tf.cast(tf.greater_equal(pred_probs, 0.5), tf.int32)
+        preds = tf.cast(tf.greater_equal(pred_probs, 0.5), tf.int64)
         correct_preds = tf.logical_and(tf.equal(input_labels, preds), tf.cast(input_labels, tf.bool))
         false_positives = tf.logical_and(tf.equal(1-input_labels, preds), tf.cast(1-input_labels, tf.bool))
         no_false_positives = tf.reduce_sum(tf.cast(false_positives, tf.float32))
@@ -848,8 +849,8 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
-            lr_max = 0.0001
-            lr_min = 0.0001
+            lr_max = 0.0005
+            lr_min = 0.0005
             #lr_max = 0.01
             #lr_min = 0.01
             #lr_max = 0.02
