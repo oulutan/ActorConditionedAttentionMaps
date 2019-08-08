@@ -49,6 +49,7 @@ RESULT_SAVE_PATH = AVA_FOLDER + '/ActionResults/'
 # this initializes the roi vector sizes as well
 #MAX_ROIS = 100
 MAX_ROIS = 50
+#MAX_ROIS = 10
 # TEMP_RESOLUTION = 32
 
 USE_GROUND_TRUTH_BOXES = False
@@ -97,11 +98,14 @@ with open(annotations_path) as fp:
 with open(DATA_FOLDER + 'action_lists_train.json') as fp: 
     TR_LISTS = json.load(fp)
 
+FOCUS_ON_CLASSES = True
+ACTIONS_TO_FOCUS = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)", "point to (an object)"]
+
 
 def filter_list_for_actions(annos, samples):
     #actions_to_focus = ["point to (an object)", "turn (e.g., a screwdriver)", "hit (an object)", "work on a computer", "cut", "take a photo", "enter", "shoot", "jump/leap", "climb (e.g., a mountain)", "throw"]
     #actions_to_focus = ["point to (an object)"]
-    actions_to_focus = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)"]
+    #actions_to_focus = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)"]
     cls_nos = ANN2TRAIN.keys()
 
     #tr_sizes = {ANN2TRAIN[cls_no_str]['class_str']: len(TR_LISTS[cls_no_str]) for cls_no_str in cls_nos}
@@ -109,8 +113,8 @@ def filter_list_for_actions(annos, samples):
     #actions_to_focus = [ANN2TRAIN[cls_no_str]['class_str'] for cls_no_str in cls_nos if len(TR_LISTS[cls_no_str])<size_th]
     #actions_to_focus = [ANN2TRAIN[cls_no_str]['class_str'] for cls_no_str in cls_nos if len(TR_LISTS[cls_no_str])>1000 and len(TR_LISTS[cls_no_str])<3000  ]
 
-    print("Focusing on actions %s" % (','.join(actions_to_focus)))
-    actions_to_focus = set(actions_to_focus)
+    print("Focusing on actions %s" % (','.join(ACTIONS_TO_FOCUS)))
+    actions_to_focus = set(ACTIONS_TO_FOCUS)
     actions_ann_ids = []
     for ann_id in ANN2TRAIN:
         if ANN2TRAIN[ann_id]['class_str'] in actions_to_focus:
@@ -135,8 +139,10 @@ def filter_list_for_actions(annos, samples):
 def get_train_list():
     samples = ANNOS_TRAIN.keys()
     samples.sort()
-    return  samples  
-    #return filter_list_for_actions(ANNOS_TRAIN, samples)
+    if FOCUS_ON_CLASSES:
+        return filter_list_for_actions(ANNOS_TRAIN, samples)
+    else:
+        return  samples  
     # train on both train+val
     #samples_val = ANNOS_VAL.keys()
     #samples_val.sort()
@@ -167,8 +173,10 @@ def get_train_list():
 def get_val_list():
     samples = ANNOS_VAL.keys()
     samples.sort()
-    return  samples
-    #return filter_list_for_actions(ANNOS_VAL, samples)
+    if FOCUS_ON_CLASSES:
+        return filter_list_for_actions(ANNOS_VAL, samples)
+    else:
+        return  samples
     # with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
     #     val_detection_segments = json.load(fp)
     # return val_detection_segments
@@ -301,6 +309,12 @@ def get_tfrecord(serialized_example):
     rois_np = tf.reshape(parsed_features['rois'], [MAX_ROIS, 4])
     no_det = parsed_features['no_det']
     segment_key = parsed_features['segment_key']
+
+    ##
+    labels_np = labels_np[:MAX_ROIS_IN_TRAINING, :]
+    rois_np = rois_np[:MAX_ROIS_IN_TRAINING, :]
+    no_det = tf.minimum(no_det, MAX_ROIS_IN_TRAINING)
+
     
     
     return sample, labels_np, rois_np, no_det, segment_key

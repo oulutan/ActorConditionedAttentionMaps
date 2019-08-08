@@ -44,7 +44,7 @@ HOSTNAME = socket.gethostname()
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
 PREPROCESS_CORES = 5 # times number of gpus
-BUFFER_SIZE = 10
+BUFFER_SIZE = 50
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -57,7 +57,7 @@ ACAM_FOLDER = os.environ['ACAM_DIR']
 MODALITY = 'RGB'
 
 # BOX_CROP_SIZE = [14, 14]
-BOX_CROP_SIZE = [10, 10]
+# BOX_CROP_SIZE = [10, 10]
 # BOX_CROP_SIZE = [7, 7]
 USE_TFRECORD = True
 
@@ -211,8 +211,10 @@ class Model_Trainer():
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         else:
             tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments)
-            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=4)
             dataset = dataset.repeat()# repeat infinitely
+            #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
+            dataset = dataset.shuffle(len(tfrecord_list))
             dataset = dataset.map(dataset_ava.get_tfrecord, 
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # repeat infinitely and shuffle with seed
@@ -222,9 +224,9 @@ class Model_Trainer():
         # import pdb;pdb.set_trace()
         # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
         #                                 cycle_length=10, block_length=1)
-        # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
-        dataset = dataset.shuffle(self.batch_size * self.no_gpus * 20)
+        #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 200)
+        #dataset = dataset.prefetch(buffer_size=BUFFER_SIZE * self.no_gpus)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         self.training_dataset = dataset
@@ -315,8 +317,10 @@ class Model_Trainer():
         # input_batch = tf.cast(input_batch, tf.float32)
 
         input_batch.set_shape([None, self.dataset_fcn.INPUT_T, self.dataset_fcn.INPUT_H, self.dataset_fcn.INPUT_W, 3])
-        labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
-        rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
+        #labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
+        labels.set_shape([None, self.dataset_fcn.MAX_ROIS_IN_TRAINING, self.dataset_fcn.NUM_CLASSES])
+        #rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
+        rois.set_shape([None, self.dataset_fcn.MAX_ROIS_IN_TRAINING, 4])
         no_dets.set_shape([None])
         segment_keys.set_shape([None])
         
@@ -451,6 +455,7 @@ class Model_Trainer():
             logging.info('Optimizing ALL weights: \n'+'\n'.join(var.name + ': ' + str(var.shape) for grad,var in self.average_grads))
 
         #with tf.device('/cpu:0'):
+        #with tf.device('/gpu:%d' % gg):
         self.optimization_op = self.optimizer.apply_gradients(self.average_grads)
 
         logging.info('Not Updating batchnorm')
@@ -507,11 +512,6 @@ class Model_Trainer():
         cur_input_seq = tf.cond(self.is_training, lambda:augmented_sequence, lambda: cur_input_seq)
         cur_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
 
-        #### INITIAL FEATURES
-        _, end_points = i3d.inference(cur_input_seq, self.is_training, self.dataset_fcn.NUM_CLASSES, end_point=end_point)
-        features = end_points[end_point]
-        # import pdb;pdb.set_trace()
-        self.feature_temp_len = feature_temp_len = int(features.shape[1])
 
 
         augmented_rois = input_augmentation.augment_box_coords(cur_rois)
@@ -534,19 +534,32 @@ class Model_Trainer():
 
         ## Args model selection
         logging.info('Using model architecture: %s' % self.architecture_str )
-        class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training)
+        
+        #### INITIAL FEATURES
+        #_, end_points = i3d.inference(cur_input_seq, self.is_training, self.dataset_fcn.NUM_CLASSES, end_point=end_point)
+        #features = end_points[end_point]
+        ## import pdb;pdb.set_trace()
+        ##self.feature_temp_len = feature_temp_len = int(features.shape[1])
+        #class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training)
         
 
 
-        logging.info('Using Dropout')
-        class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=0.4, training=self.is_training, name='CLS_DROP1')
-        logits = tf.layers.dense(inputs=class_feats_drop, 
-                                 units=self.dataset_fcn.NUM_CLASSES, 
-                                 activation=None, 
-                                 name='CLS_Logits', 
-                                 kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
+        #logging.info('Using Dropout')
+        #class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=0.4, training=self.is_training, name='CLS_DROP1')
+        #logits = tf.layers.dense(inputs=class_feats_drop, 
+        #                         units=self.dataset_fcn.NUM_CLASSES, 
+        #                         activation=None, 
+        #                         name='CLS_Logits', 
+        #                         kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
 
         # logits = tf.layers.dense(inputs=class_feats, units=NUM_CLASSES, activation=None, name='CLS_Logits')
+
+        logits = model_layers.apply_model_inference(self.architecture_str, 
+                            cur_input_seq, 
+                            self.is_training, 
+                            self.dataset_fcn.NUM_CLASSES, 
+                            shifted_rois,
+                            cur_b_idx)
 
         return logits
 
@@ -573,6 +586,13 @@ class Model_Trainer():
                 logging.info("Optimizing on Sigmoid X-Entropy loss! ")
                 sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
                                                                 logits=logits)
+                if dataset_ava.FOCUS_ON_CLASSES:
+                    ### focusing on classes
+                    logging.info('Focusing on following classes')
+                    logging.info(dataset_ava.ACTIONS_TO_FOCUS)
+                    action_mask = [float(dataset_ava.TRAIN2ANN[str(ii)]['class_str'] in dataset_ava.ACTIONS_TO_FOCUS) for ii in range(dataset_ava.NUM_CLASSES)]
+                    sigmoid_loss = sigmoid_loss * np.array(action_mask)
+
                 per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
                 #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
                 #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(62,63) if str(action) in dataset_ava.ANN2TRAIN.keys()]#work on computer
@@ -849,14 +869,22 @@ class Model_Trainer():
             # self.current_learning_rate = self.base_learning_rate
             ### Cosine learning rate
             g_step = self.sess.run(self.global_step)
-            lr_max = 0.0005
-            lr_min = 0.0005
+            #lr_max = 0.0005
+            #lr_min = 0.0005
             #lr_max = 0.01
             #lr_min = 0.01
             #lr_max = 0.02
             #lr_min = 0.002
+            lr_max = 0.01
+            lr_min = 0.0005
             reset_interval = 10
-            self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * g_step/reset_interval))
+            # linear warmup
+            warmup_intervals = 5.
+            if g_step <= warmup_intervals:
+                self.current_learning_rate = (lr_max - lr_min) * g_step / warmup_intervals + lr_min
+            # cosine learning rate
+            else:
+                self.current_learning_rate = lr_min + 1/2. * (lr_max - lr_min) * (1 + np.cos(np.pi * (g_step-warmup_intervals)/reset_interval))
             logging.info('Current learning rate is %f' % self.current_learning_rate)
             if not self.evaluate:
                 #### Training ####
