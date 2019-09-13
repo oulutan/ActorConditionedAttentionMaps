@@ -98,8 +98,10 @@ with open(annotations_path) as fp:
 with open(DATA_FOLDER + 'action_lists_train.json') as fp: 
     TR_LISTS = json.load(fp)
 
-FOCUS_ON_CLASSES = True
-ACTIONS_TO_FOCUS = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)", "point to (an object)"]
+FOCUS_ON_CLASSES = False
+#FOCUS_ON_CLASSES = True
+#ACTIONS_TO_FOCUS = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)", "point to (an object)"]
+#ACTIONS_TO_FOCUS = ["text on/look at a cellphone"]
 
 
 def filter_list_for_actions(annos, samples):
