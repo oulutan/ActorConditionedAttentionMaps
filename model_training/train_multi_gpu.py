@@ -44,7 +44,7 @@ HOSTNAME = socket.gethostname()
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
 PREPROCESS_CORES = 5 # times number of gpus
-BUFFER_SIZE = 50
+BUFFER_SIZE = 1
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -214,7 +214,8 @@ class Model_Trainer():
             dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=4)
             dataset = dataset.repeat()# repeat infinitely
             #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
-            dataset = dataset.shuffle(len(tfrecord_list))
+            #dataset = dataset.shuffle(len(tfrecord_list)//3)
+            dataset = dataset.shuffle(len(tfrecord_list)//8)
             dataset = dataset.map(dataset_ava.get_tfrecord, 
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # repeat infinitely and shuffle with seed
@@ -522,6 +523,9 @@ class Model_Trainer():
         # debugging
         self.shifted_rois = shifted_rois
         self.cur_rois = cur_rois
+        #self.shifted_rois = cur_rois
+        #self.cur_rois = cur_rois
+        #shifted_rois = cur_rois
 
         ## aug debug
         # self.regular_keyframe_rois = dataset_tf.temporal_roi_cropping(cur_input_seq, cur_rois, cur_b_idx, [100,100])[:,16,:]
@@ -591,7 +595,8 @@ class Model_Trainer():
                     logging.info('Focusing on following classes')
                     logging.info(dataset_ava.ACTIONS_TO_FOCUS)
                     action_mask = [float(dataset_ava.TRAIN2ANN[str(ii)]['class_str'] in dataset_ava.ACTIONS_TO_FOCUS) for ii in range(dataset_ava.NUM_CLASSES)]
-                    sigmoid_loss = sigmoid_loss * np.array(action_mask)
+                    #sigmoid_loss = sigmoid_loss * np.array(action_mask)
+                    #pred_probs = pred_probs * np.array(action_mask)
 
                 per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
                 #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
@@ -875,8 +880,11 @@ class Model_Trainer():
             #lr_min = 0.01
             #lr_max = 0.02
             #lr_min = 0.002
+
+            #lr_max = 0.01
+            #lr_min = 0.0005
             lr_max = 0.01
-            lr_min = 0.0005
+            lr_min = 0.001
             reset_interval = 10
             # linear warmup
             warmup_intervals = 5.
@@ -927,6 +935,7 @@ class Model_Trainer():
             if self.model_id: logging.info('Model id is: ' + self.model_id)
 
             if True: # self.evaluate:
+            #if False:
                 ## process the final results and break
                 g_step = self.sess.run(self.global_step)
                 res_name = 'VALIDATION' + '_Results_'+ self.model_id +'_%.2i' % g_step
@@ -1247,7 +1256,7 @@ class Model_Trainer():
             else:
                 raise NotImplementedError
             logging.info('\n'+ split_name + '\n')
-            logging.info('\nAverage Precision for each class \n' + class_AP_str)
+            logging.info('\nAverage Precision and Recall,Precision at .50 for each class \n' + class_AP_str)
             logging.info( split_name + '\n')
 
         if not training_flag:
@@ -1306,8 +1315,8 @@ def custom_loader(sess, ckpt_file):
     var_map = {}
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
-        #if "CLS_Logits" not in variable.name: # for jhmdb
-        if "RoiEmbedding" not in variable.name: # for jhmdb
+        if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "RoiEmbedding" not in variable.name: # for jhmdb
         #if "RelationFeats" not in variable.name: # for jhmdb
         # if 'Embedding' not in variable.name:
         #  if "global_step" not in variable.name: # for jhmdb

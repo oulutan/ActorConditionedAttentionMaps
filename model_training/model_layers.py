@@ -2,8 +2,8 @@ import tensorflow as tf
 import i3d
 import logging
 
-BOX_CROP_SIZE = [10,10]
-#BOX_CROP_SIZE = [7,7]
+#BOX_CROP_SIZE = [10,10]
+BOX_CROP_SIZE = [7,7]
 
 
 #### INITIAL FEATURES
@@ -35,10 +35,13 @@ DROPOUT_RATE = 0.5
 def apply_model_inference(architecture_str, input_seq, is_training, num_classes, rois, batch_indices):
     architecture_map = {
             'basic_model': basic_model_inference,
+            'basic_model_pooled': basic_model_pooled_inference,
+            'basic_pooled_lateral': basic_pooled_lateral_inference,
             'i3d_tail': i3d_tail_inference,
             'non_local_v1': non_local_inference,
             'acrn_roi': acrn_inference,
             'soft_attn': soft_attn_inference,
+            'slowfast': slowfast_i3d_tail_inference,
             }
     if architecture_str not in architecture_map:
         raise NotImplementedError
@@ -75,7 +78,152 @@ def basic_model_inference(input_seq, is_training, num_classes, rois, batch_indic
                              kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
     return logits
 
+def basic_model_pooled_inference(input_seq, is_training, num_classes, rois, batch_indices):
+    ### INITIAL FEATURES
+    end_point = 'Mixed_4f'
+    _, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point)
+    features = end_points[end_point]
+    B, temporal_len, H, W, C = features.shape
+    
+    temp_avg_features = tf.nn.avg_pool3d(   features,
+                                            ksize=[1, temporal_len, 1, 1, 1],
+                                            strides=[1, temporal_len, 1, 1, 1],
+                                            padding='VALID',
+                                            name='TemporalPooling')
+    
+    roi_box_features =  temporal_roi_cropping(temp_avg_features, rois, batch_indices, BOX_CROP_SIZE)
+
+    # basic model, takes the input feature and averages across temporal dim
+    # temporal_len = roi_box_features.shape[1]
+    B, temporal_lenr, Hr, Wr, Cr = roi_box_features.shape
+    #avg_features = tf.nn.avg_pool3d(      roi_box_features,
+    avg_features = tf.nn.max_pool3d(      roi_box_features,
+                                            ksize=[1, 1, Hr, Wr, 1],
+                                            strides=[1, 1, Hr, Wr, 1],
+                                            padding='VALID',
+                                            name='SpatialPooling')
+    # classification
+    class_feats = tf.layers.flatten(avg_features)
+    logging.info('Using Dropout')
+    class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=DROPOUT_RATE, training=is_training, name='CLS_DROP1')
+    logits = tf.layers.dense(inputs=class_feats_drop, 
+                             units=num_classes, 
+                             activation=None, 
+                             name='CLS_Logits', 
+                             kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
+    return logits
+
+
+def basic_pooled_lateral_inference(input_seq, is_training, num_classes, rois, batch_indices):
+    ### INITIAL FEATURES
+    end_point = 'Mixed_4f'
+    _, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point, lateral=True)
+    features = end_points[end_point]
+    B, temporal_len, H, W, C = features.shape
+    
+    temp_avg_features = tf.nn.avg_pool3d(   features,
+                                            ksize=[1, temporal_len, 1, 1, 1],
+                                            strides=[1, temporal_len, 1, 1, 1],
+                                            padding='VALID',
+                                            name='TemporalPooling')
+    
+    roi_box_features =  temporal_roi_cropping(temp_avg_features, rois, batch_indices, BOX_CROP_SIZE)
+
+    # basic model, takes the input feature and averages across temporal dim
+    # temporal_len = roi_box_features.shape[1]
+    B, temporal_lenr, Hr, Wr, Cr = roi_box_features.shape
+    #avg_features = tf.nn.avg_pool3d(      roi_box_features,
+    avg_features = tf.nn.max_pool3d(      roi_box_features,
+                                            ksize=[1, 1, Hr, Wr, 1],
+                                            strides=[1, 1, Hr, Wr, 1],
+                                            padding='VALID',
+                                            name='SpatialPooling')
+    # classification
+    class_feats = tf.layers.flatten(avg_features)
+    logging.info('Using Dropout')
+    class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=DROPOUT_RATE, training=is_training, name='CLS_DROP1')
+    logits = tf.layers.dense(inputs=class_feats_drop, 
+                             units=num_classes, 
+                             activation=None, 
+                             name='CLS_Logits', 
+                             kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
+    return logits
+
 def i3d_tail_inference(input_seq, is_training, num_classes, rois, batch_indices):
+    ### INITIAL FEATURES
+    end_point = 'Mixed_4f'
+    _, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point)
+    features = end_points[end_point]
+    
+    roi_box_features =  temporal_roi_cropping(features, rois, batch_indices, BOX_CROP_SIZE)
+
+    # I3D continued after mixed4e
+    with tf.variable_scope('Tail_I3D'):
+        tail_end_point = 'Mixed_5c'
+        # tail_end_point = 'Mixed_4f'
+        final_i3d_feat, end_points = i3d.i3d_tail(roi_box_features, is_training, tail_end_point)
+        # final_i3d_feat = end_points[tail_end_point]
+        tf.add_to_collection('final_i3d_feats', final_i3d_feat)
+        
+    B, temporal_len, H, W, C = final_i3d_feat.shape
+    avg_features = tf.nn.avg_pool3d(      final_i3d_feat,
+                                          ksize=[1, temporal_len, H, W, 1],
+                                          strides=[1, temporal_len, H, W, 1],
+                                          padding='VALID',
+                                          name='GlobalPooling')
+    # classification
+    class_feats = tf.layers.flatten(avg_features)
+    logging.info('Using Dropout')
+    class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=DROPOUT_RATE, training=is_training, name='CLS_DROP1')
+    logits = tf.layers.dense(inputs=class_feats_drop, 
+                             units=num_classes, 
+                             activation=None, 
+                             name='CLS_Logits', 
+                             kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
+    return logits
+
+def slowfast_i3d_tail_inference(input_seq, is_training, num_classes, rois, batch_indices):
+    ### INITIAL FEATURES
+    end_point = 'Mixed_4f'
+    fast = input_seq
+    slow = input_seq[:,::8]
+    import pdb;pdb.set_trace()
+    #_, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point)
+    _, end_points = i3d.inference(slow, is_training, num_classes, end_point=end_point)
+    slow_features = end_points[end_point]
+
+    with tf.variable_scope('fast'):
+        _, end_points = i3d.inference(fast, is_training, num_classes, end_point=end_point)
+        fast_features = end_points[end_point]
+    
+    roi_box_features =  temporal_roi_cropping(slow_features, rois, batch_indices, BOX_CROP_SIZE)
+
+    # I3D continued after mixed4e
+    with tf.variable_scope('Tail_I3D'):
+        tail_end_point = 'Mixed_5c'
+        # tail_end_point = 'Mixed_4f'
+        final_i3d_feat, end_points = i3d.i3d_tail(roi_box_features, is_training, tail_end_point)
+        # final_i3d_feat = end_points[tail_end_point]
+        tf.add_to_collection('final_i3d_feats', final_i3d_feat)
+        
+    B, temporal_len, H, W, C = final_i3d_feat.shape
+    avg_features = tf.nn.avg_pool3d(      final_i3d_feat,
+                                          ksize=[1, temporal_len, H, W, 1],
+                                          strides=[1, temporal_len, H, W, 1],
+                                          padding='VALID',
+                                          name='GlobalPooling')
+    # classification
+    class_feats = tf.layers.flatten(avg_features)
+    logging.info('Using Dropout')
+    class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=DROPOUT_RATE, training=is_training, name='CLS_DROP1')
+    logits = tf.layers.dense(inputs=class_feats_drop, 
+                             units=num_classes, 
+                             activation=None, 
+                             name='CLS_Logits', 
+                             kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
+    return logits
+
+def temp_dilated_i3d_tail_inference(input_seq, is_training, num_classes, rois, batch_indices):
     ### INITIAL FEATURES
     end_point = 'Mixed_4f'
     _, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point)

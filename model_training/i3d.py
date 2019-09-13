@@ -34,11 +34,15 @@ import tensorflow as tf
 # MAIN_FOLDER = os.environ['AVA_DIR']
 # WEIGHTS_PATH = MAIN_FOLDER + '/model_training/models/weights/'
 
-def inference(input_image, is_training, num_classes, end_point='Logits', channel_mult=1.0):
+def inference(input_image, is_training, num_classes, end_point='Logits', channel_mult=1.0, lateral=False):
   dropout_keep = tf.cond(is_training, lambda: 0.2, lambda: 1.0)
   processed_input = preprocess(input_image)
   with tf.variable_scope('I3D_Model'):
-    model = InceptionI3d(num_classes, spatial_squeeze=True, final_endpoint=end_point)
+    if not lateral:
+        model = InceptionI3d(num_classes, spatial_squeeze=True, final_endpoint=end_point)
+    else:
+        model = LateralInceptionI3d(num_classes, spatial_squeeze=True, final_endpoint=end_point)
+
     logits, endpoints = model(processed_input, is_training=is_training, dropout_keep_prob=dropout_keep, channel_mult=channel_mult)
 
   return logits, endpoints
@@ -689,3 +693,434 @@ def i3d_tail(input_feats, is_training, final_endpoint, channel_mult=1.0):
     #     logits = tf.squeeze(logits, [2, 3], name='SpatialSqueeze')
     # averaged_logits = tf.reduce_mean(logits, axis=1)
     # end_points[end_point] = averaged_logits
+
+
+############################ Lateral Connections for temporal context
+
+def lateralconnection(inputs, t_span, output_channels, kernel_shape, stride, is_training, name):
+    B, T, H, W, C = inputs.shape
+    subsampling_step = T // t_span
+    sub_in = inputs[:,::subsampling_step]
+    import pdb;pdb.set_trace()
+
+    #temporal_context = Unit3D(output_channels, kernel_shape, stride, name)(sub_in, is_training=is_training)
+    temporal_context = snt.Conv3D(output_channels=output_channels,
+                     kernel_shape=kernel_shape,
+                     stride=stride,
+                     padding=snt.SAME,
+                     use_bias=True)(sub_in)
+    #temporal_context = tf.layers.conv3d(sub_in, filters=output_channels, kernel_size=kernel_shape, strides=stride, padding='SAME', activation=tf.nn.relu, name=name)
+    pooled_context = tf.nn.max_pool3d(temporal_context, ksize=[1, t_span, 1, 1, 1], strides=[1, t_span, 1, 1, 1], padding='VALID', name=name+'pooling')
+    return pooled_context
+
+
+
+class LateralInceptionI3d(snt.AbstractModule):
+  """Inception-v1 I3D architecture.
+
+  The model is introduced in:
+
+    Quo Vadis, Action Recognition? A New Model and the Kinetics Dataset
+    Joao Carreira, Andrew Zisserman
+    https://arxiv.org/pdf/1705.07750v1.pdf.
+
+  See also the Inception architecture, introduced in:
+
+    Going deeper with convolutions
+    Christian Szegedy, Wei Liu, Yangqing Jia, Pierre Sermanet, Scott Reed,
+    Dragomir Anguelov, Dumitru Erhan, Vincent Vanhoucke, Andrew Rabinovich.
+    http://arxiv.org/pdf/1409.4842v1.pdf.
+  """
+
+  # Endpoints of the model in order. During construction, all the endpoints up
+  # to a designated `final_endpoint` are returned in a dictionary as the
+  # second return value.
+  VALID_ENDPOINTS = (
+      'Conv3d_1a_7x7',
+      'MaxPool3d_2a_3x3',
+      'Conv3d_2b_1x1',
+      'Conv3d_2c_3x3',
+      'MaxPool3d_3a_3x3',
+      'Mixed_3b',
+      'Mixed_3c',
+      'MaxPool3d_4a_3x3',
+      'Mixed_4b',
+      'Mixed_4c',
+      'Mixed_4d',
+      'Mixed_4e',
+      'Mixed_4f',
+      'MaxPool3d_5a_2x2',
+      'Mixed_5b',
+      'Mixed_5c',
+      'Logits',
+      'Predictions',
+  )
+
+  def __init__(self, num_classes=400, spatial_squeeze=True,
+               final_endpoint='Logits', name='inception_i3d'):
+    """Initializes I3D model instance.
+
+    Args:
+      num_classes: The number of outputs in the logit layer (default 400, which
+          matches the Kinetics dataset).
+      spatial_squeeze: Whether to squeeze the spatial dimensions for the logits
+          before returning (default True).
+      final_endpoint: The model contains many possible endpoints.
+          `final_endpoint` specifies the last endpoint for the model to be built
+          up to. In addition to the output at `final_endpoint`, all the outputs
+          at endpoints up to `final_endpoint` will also be returned, in a
+          dictionary. `final_endpoint` must be one of
+          InceptionI3d.VALID_ENDPOINTS (default 'Logits').
+      name: A string (optional). The name of this module.
+
+    Raises:
+      ValueError: if `final_endpoint` is not recognized.
+    """
+
+    if final_endpoint not in self.VALID_ENDPOINTS:
+      raise ValueError('Unknown final endpoint %s' % final_endpoint)
+
+    super(LateralInceptionI3d, self).__init__(name=name)
+    self._num_classes = num_classes
+    self._spatial_squeeze = spatial_squeeze
+    self._final_endpoint = final_endpoint
+
+  def _build(self, inputs, is_training, dropout_keep_prob=1.0, channel_mult=1.0):
+    """Connects the model to inputs.
+
+    Args:
+      inputs: Inputs to the model, which should have dimensions
+          `batch_size` x `num_frames` x 224 x 224 x `num_channels`.
+      is_training: whether to use training mode for snt.BatchNorm (boolean).
+      dropout_keep_prob: Probability for the tf.nn.dropout layer (float in
+          [0, 1)).
+
+    Returns:
+      A tuple consisting of:
+        1. Network output at location `self._final_endpoint`.
+        2. Dictionary containing all endpoints up to `self._final_endpoint`,
+           indexed by endpoint name.
+
+    Raises:
+      ValueError: if `self._final_endpoint` is not recognized.
+    """
+    if self._final_endpoint not in self.VALID_ENDPOINTS:
+      raise ValueError('Unknown final endpoint %s' % self._final_endpoint)
+
+    net = inputs
+    end_points = {}
+    end_point = 'Conv3d_1a_7x7'
+    prev = net
+    net = Unit3D(output_channels=channel_mult*64, kernel_shape=[7, 7, 7],
+                 stride=[2, 2, 2], name=end_point)(net, is_training=is_training)
+    import pdb;pdb.set_trace()
+    lat = lateralconnection(prev, 4, 64, [1,7,7], [1,2,2], is_training, 'lat1')
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+    end_point = 'MaxPool3d_2a_3x3'
+    net = tf.nn.max_pool3d(net, ksize=[1, 1, 3, 3, 1], strides=[1, 1, 2, 2, 1],
+                           padding=snt.SAME, name=end_point)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+    end_point = 'Conv3d_2b_1x1'
+    net = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                 name=end_point)(net, is_training=is_training)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+    end_point = 'Conv3d_2c_3x3'
+    net = Unit3D(output_channels=channel_mult*192, kernel_shape=[3, 3, 3],
+                 name=end_point)(net, is_training=is_training)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+    end_point = 'MaxPool3d_3a_3x3'
+    net = tf.nn.max_pool3d(net, ksize=[1, 1, 3, 3, 1], strides=[1, 1, 2, 2, 1],
+                           padding=snt.SAME, name=end_point)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_3b'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*96, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*128, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*16, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*32, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*32, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_3c'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*192, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*32, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*96, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'MaxPool3d_4a_3x3'
+    net = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1],
+                           padding=snt.SAME, name=end_point)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_4b'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*192, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*96, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*208, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*16, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*48, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_4c'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*160, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*112, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*224, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*24, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*64, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_4d'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*256, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*24, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*64, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_4e'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*112, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*144, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*288, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*32, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*64, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_4f'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*256, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*160, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*320, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*32, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*128, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'MaxPool3d_5a_2x2'
+    net = tf.nn.max_pool3d(net, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1],
+                           padding=snt.SAME, name=end_point)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_5b'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*256, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*160, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*320, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*32, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*128, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0a_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Mixed_5c'
+    with tf.variable_scope(end_point):
+      with tf.variable_scope('Branch_0'):
+        branch_0 = Unit3D(output_channels=channel_mult*384, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+      with tf.variable_scope('Branch_1'):
+        branch_1 = Unit3D(output_channels=channel_mult*192, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_1 = Unit3D(output_channels=channel_mult*384, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_1,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_2'):
+        branch_2 = Unit3D(output_channels=channel_mult*48, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0a_1x1')(net, is_training=is_training)
+        branch_2 = Unit3D(output_channels=channel_mult*128, kernel_shape=[3, 3, 3],
+                          name='Conv3d_0b_3x3')(branch_2,
+                                                is_training=is_training)
+      with tf.variable_scope('Branch_3'):
+        branch_3 = tf.nn.max_pool3d(net, ksize=[1, 3, 3, 3, 1],
+                                    strides=[1, 1, 1, 1, 1], padding=snt.SAME,
+                                    name='MaxPool3d_0a_3x3')
+        branch_3 = Unit3D(output_channels=channel_mult*128, kernel_shape=[1, 1, 1],
+                          name='Conv3d_0b_1x1')(branch_3,
+                                                is_training=is_training)
+      net = tf.concat([branch_0, branch_1, branch_2, branch_3], 4)
+    end_points[end_point] = net
+    if self._final_endpoint == end_point: return net, end_points
+
+    end_point = 'Logits'
+    with tf.variable_scope(end_point):
+      net = tf.nn.avg_pool3d(net, ksize=[1, 2, 7, 7, 1],
+                             strides=[1, 1, 1, 1, 1], padding=snt.VALID)
+      net = tf.nn.dropout(net, dropout_keep_prob)
+      logits = Unit3D(output_channels=self._num_classes,
+                      kernel_shape=[1, 1, 1],
+                      activation_fn=None,
+                      use_batch_norm=False,
+                      use_bias=True,
+                      name='Conv3d_0c_1x1')(net, is_training=is_training)
+      if self._spatial_squeeze:
+        logits = tf.squeeze(logits, [2, 3], name='SpatialSqueeze')
+    averaged_logits = tf.reduce_mean(logits, axis=1)
+    end_points[end_point] = averaged_logits
+    if self._final_endpoint == end_point: return averaged_logits, end_points
+
+    end_point = 'Predictions'
+    predictions = tf.nn.softmax(averaged_logits)
+    end_points[end_point] = predictions
+    return predictions, end_points
