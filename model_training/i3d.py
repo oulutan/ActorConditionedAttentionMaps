@@ -64,6 +64,7 @@ def initialize_weights(sess, path_to_weights):
   for variable in i3d_var:
       # if variable.name.endswith('w:0') or variable.name.endswith('beta:0'):
       if 'Adam' not in variable.name:
+        if 'lateral' not in variable.name:
           map_name = variable.name.replace(':0', '')
           map_name = map_name.replace('I3D_Model', 'RGB')
           var_map[map_name] = variable
@@ -701,10 +702,10 @@ def lateralconnection(inputs, t_span, output_channels, kernel_shape, stride, is_
     B, T, H, W, C = inputs.shape
     subsampling_step = T // t_span
     sub_in = inputs[:,::subsampling_step]
-    import pdb;pdb.set_trace()
 
     #temporal_context = Unit3D(output_channels, kernel_shape, stride, name)(sub_in, is_training=is_training)
-    temporal_context = snt.Conv3D(output_channels=output_channels,
+    with tf.variable_scope(name):
+        temporal_context = snt.Conv3D(output_channels=output_channels,
                      kernel_shape=kernel_shape,
                      stride=stride,
                      padding=snt.SAME,
@@ -813,8 +814,8 @@ class LateralInceptionI3d(snt.AbstractModule):
     prev = net
     net = Unit3D(output_channels=channel_mult*64, kernel_shape=[7, 7, 7],
                  stride=[2, 2, 2], name=end_point)(net, is_training=is_training)
-    import pdb;pdb.set_trace()
-    lat = lateralconnection(prev, 4, 64, [1,7,7], [1,2,2], is_training, 'lat1')
+    lat = lateralconnection(prev, 4, 64, [1,7,7], [1,2,2], is_training, 'lateral1')
+    net = net + lat
     end_points[end_point] = net
     if self._final_endpoint == end_point: return net, end_points
     end_point = 'MaxPool3d_2a_3x3'
