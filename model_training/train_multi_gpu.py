@@ -44,7 +44,7 @@ HOSTNAME = socket.gethostname()
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
 PREPROCESS_CORES = 5 # times number of gpus
-BUFFER_SIZE = 1
+BUFFER_SIZE = 5
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -842,10 +842,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                #model_saver.restore(sess, ckpt_file)
-                #logging.info('Loading model checkpoint from: ' + ckpt_file)
-                custom_loader(sess,ckpt_file)
-                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                model_saver.restore(sess, ckpt_file)
+                logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
