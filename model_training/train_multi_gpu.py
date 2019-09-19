@@ -61,8 +61,8 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [7, 7]
 USE_TFRECORD = True
 
-TRAIN_FULL_MODEL = True
-#TRAIN_FULL_MODEL = False
+#TRAIN_FULL_MODEL = True
+TRAIN_FULL_MODEL = False
 
 ONLY_INIT_I3D = False
 
@@ -363,7 +363,10 @@ class Model_Trainer():
             # 'MaxPool3d_5a_2x2',
             # 'Mixed_5b',
             # 'Mixed_5c',
-            'CLS_Logits',
+            # 'CLS_Logits',
+            'lateral1',
+            'lateral2',
+            'lateral3',
         ]
 
         # Initialize the optimizer
@@ -842,10 +845,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                model_saver.restore(sess, ckpt_file)
-                logging.info('Loading model checkpoint from: ' + ckpt_file)
-                #custom_loader(sess,ckpt_file)
-                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                #model_saver.restore(sess, ckpt_file)
+                #logging.info('Loading model checkpoint from: ' + ckpt_file)
+                custom_loader(sess,ckpt_file)
+                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
@@ -883,7 +886,9 @@ class Model_Trainer():
 
             #lr_max = 0.01
             #lr_min = 0.0005
-            lr_max = 0.01
+            #lr_max = 0.01
+            #lr_min = 0.001
+            lr_max = 0.001
             lr_min = 0.001
             reset_interval = 10
             # linear warmup
@@ -1315,7 +1320,7 @@ def custom_loader(sess, ckpt_file):
     var_map = {}
     for variable in global_vars:
         #if "Adam" not in variable.name and "moving" not in variable.name:
-        if "CLS_Logits" not in variable.name: # for jhmdb
+        #if "CLS_Logits" not in variable.name: # for jhmdb
         #if "RoiEmbedding" not in variable.name: # for jhmdb
         #if "RelationFeats" not in variable.name: # for jhmdb
         # if 'Embedding' not in variable.name:

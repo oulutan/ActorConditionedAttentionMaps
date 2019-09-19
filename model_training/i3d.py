@@ -811,11 +811,11 @@ class LateralInceptionI3d(snt.AbstractModule):
     net = inputs
     end_points = {}
     end_point = 'Conv3d_1a_7x7'
-    prev = net
+    prev = net ###
     net = Unit3D(output_channels=channel_mult*64, kernel_shape=[7, 7, 7],
                  stride=[2, 2, 2], name=end_point)(net, is_training=is_training)
-    lat = lateralconnection(prev, 4, 64, [1,7,7], [1,2,2], is_training, 'lateral1')
-    net = net + lat
+    lat = lateralconnection(prev, 4, 64, [1,7,7], [1,2,2], is_training, 'lateral1') ###
+    net = net + lat ###
     end_points[end_point] = net
     if self._final_endpoint == end_point: return net, end_points
     end_point = 'MaxPool3d_2a_3x3'
@@ -824,13 +824,19 @@ class LateralInceptionI3d(snt.AbstractModule):
     end_points[end_point] = net
     if self._final_endpoint == end_point: return net, end_points
     end_point = 'Conv3d_2b_1x1'
+    prev = net ###
     net = Unit3D(output_channels=channel_mult*64, kernel_shape=[1, 1, 1],
                  name=end_point)(net, is_training=is_training)
+    lat = lateralconnection(prev, 4, 64, [1,1,1], [1,1,1], is_training, 'lateral2') ###
+    net = net + lat ###
     end_points[end_point] = net
     if self._final_endpoint == end_point: return net, end_points
     end_point = 'Conv3d_2c_3x3'
+    prev = net ###
     net = Unit3D(output_channels=channel_mult*192, kernel_shape=[3, 3, 3],
                  name=end_point)(net, is_training=is_training)
+    lat = lateralconnection(prev, 4, 192, [3,3,3], [1,1,1], is_training, 'lateral3') ###
+    net = net + lat ###
     end_points[end_point] = net
     if self._final_endpoint == end_point: return net, end_points
     end_point = 'MaxPool3d_3a_3x3'
