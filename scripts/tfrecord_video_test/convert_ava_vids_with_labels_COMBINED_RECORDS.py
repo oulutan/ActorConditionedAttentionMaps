@@ -4,8 +4,7 @@ import numpy as np
 import cv2
 import os
 import json
-#from tqdm import tqdm
-from joblib import Parallel, delayed
+from tqdm import tqdm
 
 def _int64_feature(value):
     """Wrapper for inserting int64 features into Example proto."""
@@ -28,9 +27,10 @@ def _bytes_list_feature(values):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=values))
 
 
-SPLIT = 'train'
-input_dir = "/home/ulutan/work/ActorConditionedAttentionMaps/data/AVA/segments/%s/clips/" % SPLIT
-output_dir = "/data/ulutan/AVA/tfrecords_labels/%s_tfrecords/" % SPLIT
+#SPLIT = 'train'
+SPLIT = 'val'
+input_dir = "/home/oytun/work/ActorConditionedAttentionMaps/data/AVA/segments/%s/clips/" % SPLIT
+#output_dir = "/data/ulutan/AVA/tfrecords_labels/%s_tfrecords/" % SPLIT
 #input_dir = "/home/ulutan/work/ActorConditionedAttentionMaps/data/AVA/segments/train/clips/"
 #output_dir = "/home/ulutan/work/train_tfrecords/"
 #input_dir = "/home/ulutan/work/ActorConditionedAttentionMaps/data/AVA/segments/val/clips/"
@@ -279,11 +279,12 @@ def generate_tfrecord(movie):
         #output_file = os.path.join(output_dir, movie, "%s.tfrecord" % segment_no_ext)
         input_file = os.path.join(input_dir, movie, segment)
         #with tf.python_io.TFRecordWriter(output_file) as writer:
-        if True:
+        #if True:
 
 def create_tf_example(segment_key):
-	movie, segment_no_ext = segment_key.split('.')
-	input_file = os.path.join(input_dir, movie, segment)
+    movie, segment_no_ext = segment_key.split('.')
+    segment = '%s.mp4' % segment_no_ext
+    input_file = os.path.join(input_dir, movie, segment)
     # Read and resize all video frames, np.uint8 of size [N,H,W,3]
     video = imageio.get_reader(input_file)
     #frame_gen = video.iter_data()
@@ -317,7 +318,7 @@ def create_tf_example(segment_key):
     video.close()
 
     if "%s.%s" % (movie, segment_no_ext) not in ANNOS:
-        continue
+        return None
 
     # get labels
     labels_np, rois_np, no_det, segment_key = get_labels_wrapper(movie, segment_no_ext)
@@ -334,7 +335,7 @@ def create_tf_example(segment_key):
     #features['filename']    = _bytes_feature(tf.compat.as_bytes(example['video_id']))
     #features['filename']    = _bytes_feature(tf.compat.as_bytes(fname))
     features['movie']    = _bytes_feature(tf.compat.as_bytes(movie))
-    features['segment']    = _bytes_feature(tf.compat.as_bytes(segment_no_ext))
+    features['segment']    = _bytes_feature(tf.compat.as_bytes(str(segment_no_ext)))
     
     # Compress the frames using JPG and store in as a list of strings in 'frames'
     encoded_frames = [tf.compat.as_bytes(cv2.imencode(".jpg", frame)[1].tobytes())
@@ -343,15 +344,37 @@ def create_tf_example(segment_key):
     
     #labels
     features['no_det'] = _int64_feature(no_det)
-    features['segment_key'] = _bytes_feature(segment_key)
+    features['segment_key'] = _bytes_feature(str(segment_key))
     features['labels'] = _int64_feature(labels_np.reshape([-1]).tolist())
     features['rois'] = _float_feature(rois_np.reshape([-1]).tolist())
     
     tfrecord_example = tf.train.Example(features=tf.train.Features(feature=features))
-	return tfrecord_example
+    return tfrecord_example
     #writer.write(tfrecord_example.SerializeToString())
     #tqdm.write("Output file %s written!" % output_file)
     #print("Output file %s written!" % output_file)
+
+def open_sharded_output_tfrecords(exit_stack, base_path, num_shards):
+  """Opens all TFRecord shards for writing and adds them to an exit stack.
+  Args:
+    exit_stack: A context2.ExitStack used to automatically closed the TFRecords
+      opened in this function.
+    base_path: The base path for all shards
+    num_shards: The number of shards
+  Returns:
+    The list of opened TFRecords. Position k in the list corresponds to shard k.
+  """
+  tf_record_output_filenames = [
+      '{}-{:05d}-of-{:05d}'.format(base_path, idx, num_shards)
+      for idx in range(num_shards)
+  ]
+
+  tfrecords = [
+      exit_stack.enter_context(tf.python_io.TFRecordWriter(file_name))
+      for file_name in tf_record_output_filenames
+  ]
+
+  return tfrecords
 
 #Parallel(n_jobs=20)(delayed(generate_tfrecord)(movie) for movie in movies)
 #for movie in movies:
@@ -360,15 +383,25 @@ def create_tf_example(segment_key):
 #writer = tf.python_io.TFRecordWriter(output_file)
 
 import contextlib2
-from object_detection.dataset_tools import tf_record_creation_util
 
 num_shards=10
-output_filebase='/path/to/train_dataset.record'
+output_filebase='/media/ssd1/oytun/data/AVA/tfrecords_combined/%s/%s_dataset.record' % (SPLIT, SPLIT)
+
+examples = ALL_KEYS[:1000]
+examples.sort()
+if SPLIT == 'train':
+    np.random.seed(17)
+    np.random.shuffle(examples)
+
 
 with contextlib2.ExitStack() as tf_record_close_stack:
-  output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
+  output_tfrecords = open_sharded_output_tfrecords(
       tf_record_close_stack, output_filebase, num_shards)
-  for index, example in examples:
+  for index, example in enumerate(tqdm(examples)):
+    #print('Working on %s' % example)
     tf_example = create_tf_example(example)
-    output_shard_index = index % num_shards
-    output_tfrecords[output_shard_index].write(tf_example.SerializeToString())
+    if tf_example:
+        output_shard_index = index % num_shards
+        output_tfrecords[output_shard_index].write(tf_example.SerializeToString())
+    else:
+        print('\t\t %s has no annotation' % example)
