@@ -271,9 +271,9 @@ class Model_Trainer():
 
         # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
         #if not self.evaluate:
-        if True:
-            np.random.seed(10)
-            np.random.shuffle(val_detection_segments)
+        #if True:
+        #    np.random.seed(10)
+        #    np.random.shuffle(val_detection_segments)
 
         if not USE_TFRECORD:
             dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
@@ -843,10 +843,10 @@ class Model_Trainer():
         # Load the checkpoint if the argument exists
         if ckpt_file:
             if ONLY_INIT_I3D == False:
-                #model_saver.restore(sess, ckpt_file)
-                #logging.info('Loading model checkpoint from: ' + ckpt_file)
-                custom_loader(sess,ckpt_file)
-                logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
+                model_saver.restore(sess, ckpt_file)
+                logging.info('Loading model checkpoint from: ' + ckpt_file)
+                #custom_loader(sess,ckpt_file)
+                #logging.info('Loading using CUSTOM saver and  model checkpoint from: ' + ckpt_file)
 
             else:
                 i3d.initialize_all_i3d_from_ckpt(sess, ckpt_file)
