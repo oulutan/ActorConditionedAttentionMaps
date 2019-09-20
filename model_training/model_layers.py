@@ -427,8 +427,17 @@ def soft_attn_inference(input_seq, is_training, num_classes, rois, batch_indices
     end_point = 'Mixed_4f'
     _, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point)
     features = end_points[end_point]
+
+    B, temporal_len, H, W, C = features.shape
     
-    roi_box_features =  temporal_roi_cropping(features, rois, batch_indices, BOX_CROP_SIZE) # B x 8 x 10 x 10 x 832
+    temp_avg_features = tf.nn.avg_pool3d(   features,
+                                            ksize=[1, temporal_len, 1, 1, 1],
+                                            strides=[1, temporal_len, 1, 1, 1],
+                                            padding='VALID',
+                                            name='TemporalPooling')
+    
+    #roi_box_features =  temporal_roi_cropping(features, rois, batch_indices, BOX_CROP_SIZE) # B x 8 x 10 x 10 x 832
+    roi_box_features =  temporal_roi_cropping(temp_avg_features, rois, batch_indices, BOX_CROP_SIZE) # B x 1 x 10 x 10 x 832
 
     with tf.variable_scope('Soft_Attention_Model'):
         _, Tc, Hc, Wc, Cc = features.shape.as_list()
@@ -440,14 +449,15 @@ def soft_attn_inference(input_seq, is_training, num_classes, rois, batch_indices
         #flat_box_feats = basic_model_pooled(roi_box_features)
         ############ roi feats #######
         #flat_box_feats = basic_model(roi_box_features)
-        _, temporal_len_r, H_r, W_r, C_r = roi_box_features.shape
-        avg_features_r = tf.nn.avg_pool3d(      roi_box_features,
-        #avg_features = tf.nn.max_pool3d(      roi_box_features,
-                                                ksize=[1, temporal_len_r, 1, 1, 1],
-                                                strides=[1, temporal_len_r, 1, 1, 1],
-                                                padding='VALID',
-                                                name='TemporalPooling')
-        flat_box_feats = tf.layers.flatten(avg_features_r)
+        #_, temporal_len_r, H_r, W_r, C_r = roi_box_features.shape
+        #avg_features_r = tf.nn.avg_pool3d(      roi_box_features,
+        ##avg_features = tf.nn.max_pool3d(      roi_box_features,
+        #                                        ksize=[1, temporal_len_r, 1, 1, 1],
+        #                                        strides=[1, temporal_len_r, 1, 1, 1],
+        #                                        padding='VALID',
+        #                                        name='TemporalPooling')
+        #flat_box_feats = tf.layers.flatten(avg_features_r)
+        flat_box_feats = tf.layers.flatten(roi_box_features)
 
         roi_embedding = tf.layers.dense(flat_box_feats, 
                                         feature_map_channel, 
@@ -532,8 +542,17 @@ def soft_lateral_inference(input_seq, is_training, num_classes, rois, batch_indi
     end_point = 'Mixed_4f'
     _, end_points = i3d.inference(input_seq, is_training, num_classes, end_point=end_point,lateral=True)
     features = end_points[end_point]
+
+    B, temporal_len, H, W, C = features.shape
     
-    roi_box_features =  temporal_roi_cropping(features, rois, batch_indices, BOX_CROP_SIZE) # B x 8 x 10 x 10 x 832
+    temp_avg_features = tf.nn.avg_pool3d(   features,
+                                            ksize=[1, temporal_len, 1, 1, 1],
+                                            strides=[1, temporal_len, 1, 1, 1],
+                                            padding='VALID',
+                                            name='TemporalPooling')
+    
+    #roi_box_features =  temporal_roi_cropping(features, rois, batch_indices, BOX_CROP_SIZE) # B x 8 x 10 x 10 x 832
+    roi_box_features =  temporal_roi_cropping(temp_avg_features, rois, batch_indices, BOX_CROP_SIZE) # B x 1 x 10 x 10 x 832
 
     with tf.variable_scope('Soft_Attention_Model'):
         _, Tc, Hc, Wc, Cc = features.shape.as_list()
@@ -545,14 +564,15 @@ def soft_lateral_inference(input_seq, is_training, num_classes, rois, batch_indi
         #flat_box_feats = basic_model_pooled(roi_box_features)
         ############ roi feats #######
         #flat_box_feats = basic_model(roi_box_features)
-        _, temporal_len_r, H_r, W_r, C_r = roi_box_features.shape
-        avg_features_r = tf.nn.avg_pool3d(      roi_box_features,
-        #avg_features = tf.nn.max_pool3d(      roi_box_features,
-                                                ksize=[1, temporal_len_r, 1, 1, 1],
-                                                strides=[1, temporal_len_r, 1, 1, 1],
-                                                padding='VALID',
-                                                name='TemporalPooling')
-        flat_box_feats = tf.layers.flatten(avg_features_r)
+        #_, temporal_len_r, H_r, W_r, C_r = roi_box_features.shape
+        #avg_features_r = tf.nn.avg_pool3d(      roi_box_features,
+        ##avg_features = tf.nn.max_pool3d(      roi_box_features,
+        #                                        ksize=[1, temporal_len_r, 1, 1, 1],
+        #                                        strides=[1, temporal_len_r, 1, 1, 1],
+        #                                        padding='VALID',
+        #                                        name='TemporalPooling')
+        #flat_box_feats = tf.layers.flatten(avg_features_r)
+        flat_box_feats = tf.layers.flatten(roi_box_features)
 
         roi_embedding = tf.layers.dense(flat_box_feats, 
                                         feature_map_channel, 
