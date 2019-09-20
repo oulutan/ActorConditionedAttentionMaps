@@ -43,8 +43,8 @@ HOSTNAME = socket.gethostname()
 # if HOSTNAME == 'skywalker':
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
-PREPROCESS_CORES = 5 # times number of gpus
-BUFFER_SIZE = 5
+PREPROCESS_CORES = 10 # times number of gpus
+BUFFER_SIZE = 20
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -61,8 +61,8 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [7, 7]
 USE_TFRECORD = True
 
-#TRAIN_FULL_MODEL = True
-TRAIN_FULL_MODEL = False
+TRAIN_FULL_MODEL = True
+#TRAIN_FULL_MODEL = False
 
 ONLY_INIT_I3D = False
 
@@ -128,9 +128,6 @@ def main():
     if run_test: # overwrite evaluate if we are testing
         evaluate = True
 
-    if evaluate and ckpt_file == '':
-        logging.error('EVALUATION MODE WITHOUT CHECKPOINT ARGUMENT!!')
-        # import pdb;pdb.set_trace()
 
 
     gpu = args.g
@@ -149,6 +146,9 @@ def main():
 
     if run_test:
         logging.info('GENERATING TEST SET RESULTS!!!')
+    if evaluate and ckpt_file == '':
+        logging.warning('EVALUATION MODE WITHOUT CHECKPOINT ARGUMENT!!')
+        # import pdb;pdb.set_trace()
 
     
 
@@ -282,18 +282,13 @@ class Model_Trainer():
                     tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         else:
-            if not self.run_test:
-                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
-                dataset = tf.data.TFRecordDataset(tfrecord_list)
-                dataset = dataset.repeat()# repeat infinitely
-                dataset = dataset.map(dataset_ava.get_tfrecord, 
-                        num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
-            else:
-                tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
-                dataset = tf.data.TFRecordDataset(tfrecord_list)
-                dataset = dataset.repeat()# repeat infinitely
-                dataset = dataset.map(dataset_ava.get_tfrecord,
-                        num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
+            #tfrecord_list = tf.data.Dataset.list_files("/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-*-of-00010")
+            #tfrecord_list = ["/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-00001-of-00010"]
+            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(dataset_ava.get_tfrecord, 
+                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
@@ -372,7 +367,7 @@ class Model_Trainer():
         # Initialize the optimizer
         with tf.variable_scope('Optimization'):
             global_step = tf.train.get_or_create_global_step()
-            increment_global_step_op = tf.assign(global_step, global_step+1)
+            increment_global_step_op = tf.assign(global_step, global_step+1, name='GlobalStep')
 
             self.global_step = global_step
             self.increment_global_step_op = increment_global_step_op
@@ -522,6 +517,9 @@ class Model_Trainer():
         # make sure they stay within boundaries
         # shifted_rois = tf.clip_by_value(shifted_rois, 0.0, 1.0)
         shifted_rois = tf.cond(self.is_training, lambda:augmented_rois, lambda: cur_rois)
+        #shifted_rois = cur_rois
+        #augmented_rois = cur_rois
+
 
         # debugging
         self.shifted_rois = shifted_rois
