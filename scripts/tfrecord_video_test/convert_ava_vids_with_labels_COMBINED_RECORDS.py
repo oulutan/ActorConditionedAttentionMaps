@@ -29,7 +29,8 @@ def _bytes_list_feature(values):
 
 #SPLIT = 'train'
 SPLIT = 'val'
-input_dir = "/home/oytun/work/ActorConditionedAttentionMaps/data/AVA/segments/%s/clips/" % SPLIT
+#input_dir = "/home/oytun/work/ActorConditionedAttentionMaps/data/AVA/segments/%s/clips/" % SPLIT
+input_dir = "/home/ulutan/work/Generalizable_Action_Detection/AVA/segments/%s/clips/" % SPLIT
 #output_dir = "/data/ulutan/AVA/tfrecords_labels/%s_tfrecords/" % SPLIT
 #input_dir = "/home/ulutan/work/ActorConditionedAttentionMaps/data/AVA/segments/train/clips/"
 #output_dir = "/home/ulutan/work/train_tfrecords/"
@@ -337,9 +338,10 @@ def create_tf_example(segment_key):
     features['movie']    = _bytes_feature(tf.compat.as_bytes(movie))
     features['segment']    = _bytes_feature(tf.compat.as_bytes(str(segment_no_ext)))
     
-    # Compress the frames using JPG and store in as a list of strings in 'frames'
+    ## Compress the frames using JPG and store in as a list of strings in 'frames'
     encoded_frames = [tf.compat.as_bytes(cv2.imencode(".jpg", frame)[1].tobytes())
                       for frame in frames]
+    #encoded_frames = [ frame.tobytes() for frame in frames]
     features['frames'] = _bytes_list_feature(encoded_frames)
     
     #labels
@@ -385,7 +387,8 @@ def open_sharded_output_tfrecords(exit_stack, base_path, num_shards):
 import contextlib2
 
 num_shards=10
-output_filebase='/media/ssd1/oytun/data/AVA/tfrecords_combined/%s/%s_dataset.record' % (SPLIT, SPLIT)
+#output_filebase='/media/ssd1/oytun/data/AVA/tfrecords_combined/%s/%s_dataset.record' % (SPLIT, SPLIT)
+output_filebase='/data/ulutan/AVA/uncomp_tfrecords_combined/%s/%s_dataset.record' % (SPLIT, SPLIT)
 
 examples = ALL_KEYS[:1000]
 examples.sort()
