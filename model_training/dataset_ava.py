@@ -299,7 +299,9 @@ def get_tfrecord(serialized_example):
     # Decode the encoded JPG images
     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
-    sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+    #sample = tf.map_fn(lambda i: tf.decode_raw(parsed_features["frames"].values[i], tf.uint8), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+    #sample = tf.reshape(sample, [INPUT_T,INPUT_H,INPUT_W,3])
+    #sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
 
     if INPUT_H != 400:
         sample = tf.image.resize_images(sample, [INPUT_H, INPUT_W])

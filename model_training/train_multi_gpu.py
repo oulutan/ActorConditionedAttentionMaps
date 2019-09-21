@@ -44,7 +44,7 @@ HOSTNAME = socket.gethostname()
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
 PREPROCESS_CORES = 10 # times number of gpus
-BUFFER_SIZE = 20
+BUFFER_SIZE = 1
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -61,8 +61,8 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [7, 7]
 USE_TFRECORD = True
 
-TRAIN_FULL_MODEL = True
-#TRAIN_FULL_MODEL = False
+#TRAIN_FULL_MODEL = True
+TRAIN_FULL_MODEL = False
 
 ONLY_INIT_I3D = False
 
@@ -194,8 +194,8 @@ class Model_Trainer():
         split = 'train'
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
-        # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
-        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+        output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
 
         # shuffle the list outside tf so I know the order. 
         #np.random.seed(5)
@@ -211,13 +211,13 @@ class Model_Trainer():
                     num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
         else:
             tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments)
-            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=4)
-            dataset = dataset.repeat()# repeat infinitely
+            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=PREPROCESS_CORES)
             #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
             #dataset = dataset.shuffle(len(tfrecord_list)//3)
             dataset = dataset.shuffle(len(tfrecord_list)//8)
-            dataset = dataset.map(dataset_ava.get_tfrecord, 
-                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            dataset = dataset.repeat()# repeat infinitely
+            #dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES)
         # repeat infinitely and shuffle with seed
         # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
         # dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensors(x).repeat(2))
@@ -266,8 +266,8 @@ class Model_Trainer():
         ## DEBUGGING
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
-        # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
-        output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+        output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
 
         # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
         #if not self.evaluate:
@@ -285,10 +285,9 @@ class Model_Trainer():
             tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
             #tfrecord_list = tf.data.Dataset.list_files("/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-*-of-00010")
             #tfrecord_list = ["/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-00001-of-00010"]
-            dataset = tf.data.TFRecordDataset(tfrecord_list)
+            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=PREPROCESS_CORES)
             dataset = dataset.repeat()# repeat infinitely
-            dataset = dataset.map(dataset_ava.get_tfrecord, 
-                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES)
         # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
         dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
@@ -415,6 +414,7 @@ class Model_Trainer():
             with tf.device('/gpu:%d' % gg):
               with tf.name_scope('%s_%d' % ('GPU', gg)):
                 # get the logits
+                cur_input_seq = tf.cast(cur_input_seq, tf.float32)[:,:,:,::-1]
                 cur_logits = self.single_tower_inference(cur_input_seq, rois_nz, batch_indices_nz)
                 self.logits_list.append(cur_logits)
 
