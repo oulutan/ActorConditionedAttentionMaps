@@ -414,7 +414,7 @@ class Model_Trainer():
             with tf.device('/gpu:%d' % gg):
               with tf.name_scope('%s_%d' % ('GPU', gg)):
                 # get the logits
-                cur_input_seq = tf.cast(cur_input_seq, tf.float32)[:,:,:,::-1]
+                cur_input_seq = tf.cast(cur_input_seq, tf.float32)[:,:,:,:,::-1]
                 cur_logits = self.single_tower_inference(cur_input_seq, rois_nz, batch_indices_nz)
                 self.logits_list.append(cur_logits)
 
