@@ -100,8 +100,9 @@ with open(DATA_FOLDER + 'action_lists_train.json') as fp:
 
 FOCUS_ON_CLASSES = False
 #FOCUS_ON_CLASSES = True
-#ACTIONS_TO_FOCUS = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)", "point to (an object)"]
+ACTIONS_TO_FOCUS = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)", "point to (an object)"]
 #ACTIONS_TO_FOCUS = ["text on/look at a cellphone"]
+#ACTIONS_TO_FOCUS = ["shoot"]
 
 
 def filter_list_for_actions(annos, samples):
@@ -131,8 +132,8 @@ def filter_list_for_actions(annos, samples):
                 new_sample_list.append(sample)
                 break
     # add some random samples 
-    random.seed(10)
-    random_samples = random.sample(samples, 1000)
+    #random.seed(10)
+    random_samples = random.sample(samples, 2000)
     new_sample_list.extend(random_samples)
     
     return new_sample_list

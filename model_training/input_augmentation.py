@@ -110,10 +110,10 @@ def augment_box_coords(cur_rois):
     ratio_augmented = ratio * ratio_aug_mult
 
     # augment center
-    ycenter_aug_mult = tf.random_uniform([R], minval=-0.15, maxval=0.15, name='YCenterAugmentationMult')
+    ycenter_aug_mult = tf.random_uniform([R], minval=-0.10, maxval=0.10, name='YCenterAugmentationMult')
     y_center_augmented = y_center + ycenter_aug_mult * height
 
-    xcenter_aug_mult = tf.random_uniform([R], minval=-0.15, maxval=0.15, name='XCenterAugmentationMult')
+    xcenter_aug_mult = tf.random_uniform([R], minval=-0.10, maxval=0.10, name='XCenterAugmentationMult')
     x_center_augmented = x_center + xcenter_aug_mult * width
 
     # calculate the augmented bbox coords

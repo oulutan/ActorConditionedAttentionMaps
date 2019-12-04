@@ -61,8 +61,8 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [7, 7]
 USE_TFRECORD = True
 
-#TRAIN_FULL_MODEL = True
-TRAIN_FULL_MODEL = False
+TRAIN_FULL_MODEL = True
+#TRAIN_FULL_MODEL = False
 
 ONLY_INIT_I3D = False
 
@@ -191,6 +191,9 @@ class Model_Trainer():
 
     def set_data_inputs(self):
         train_detection_segments = self.dataset_fcn.get_train_list()
+        #train_detection_segments += self.dataset_fcn.get_train_list()
+        #train_detection_segments += self.dataset_fcn.get_train_list()
+        #train_detection_segments += self.dataset_fcn.get_train_list()
         split = 'train'
 
         #               [sample, labels_np, rois_np, no_det, segment_key] 
@@ -357,10 +360,10 @@ class Model_Trainer():
             # 'MaxPool3d_5a_2x2',
             # 'Mixed_5b',
             # 'Mixed_5c',
-            # 'CLS_Logits',
-            'lateral1',
-            'lateral2',
-            'lateral3',
+            'CLS_Logits',
+            #'lateral1',
+            #'lateral2',
+            #'lateral3',
         ]
 
         # Initialize the optimizer
@@ -592,12 +595,20 @@ class Model_Trainer():
                 sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
                                                                 logits=logits)
                 if dataset_ava.FOCUS_ON_CLASSES:
+                #if True:
                     ### focusing on classes
                     logging.info('Focusing on following classes')
                     logging.info(dataset_ava.ACTIONS_TO_FOCUS)
                     action_mask = [float(dataset_ava.TRAIN2ANN[str(ii)]['class_str'] in dataset_ava.ACTIONS_TO_FOCUS) for ii in range(dataset_ava.NUM_CLASSES)]
                     #sigmoid_loss = sigmoid_loss * np.array(action_mask)
+                    neg_loss = sigmoid_loss * np.array(action_mask) * (1. - fl_input_labels)
+                    pos_loss = sigmoid_loss * np.array(action_mask) * (fl_input_labels) * 10
                     #pred_probs = pred_probs * np.array(action_mask)
+                    sigmoid_loss += neg_loss + pos_loss
+                # neg_loss = sigmoid_loss * (1. - fl_input_labels)
+                # pos_loss = sigmoid_loss * (fl_input_labels) * 10
+                # #pred_probs = pred_probs * np.array(action_mask)
+                # sigmoid_loss = neg_loss + pos_loss
 
                 per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
                 #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
@@ -886,8 +897,8 @@ class Model_Trainer():
             #lr_min = 0.0005
             #lr_max = 0.01
             #lr_min = 0.001
-            lr_max = 0.001
-            lr_min = 0.001
+            lr_max = 0.01
+            lr_min = 0.01
             reset_interval = 10
             # linear warmup
             warmup_intervals = 5.
@@ -1323,10 +1334,10 @@ def custom_loader(sess, ckpt_file):
         #if "RelationFeats" not in variable.name: # for jhmdb
         # if 'Embedding' not in variable.name:
         #  if "global_step" not in variable.name: # for jhmdb
-        #if "Adam" not in variable.name: # for jhmdb
+        if "Adam" not in variable.name: # for jhmdb
         #if "_BN" not in variable.name: # for jhmdb
-         if 'lateral' not in variable.name:
-          if "global_step" not in variable.name: # for jhmdb
+         #if 'lateral' not in variable.name:
+          #if "global_step" not in variable.name: # for jhmdb
             map_name = variable.name.replace(':0', '')
             #if "I3D_Model" in variable.name:
             #    map_name = map_name.replace('I3D_Model', 'RGB')
