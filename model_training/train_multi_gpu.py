@@ -192,7 +192,7 @@ class Model_Trainer():
 
     def set_data_inputs(self):
         if self.dataset_str == 'ava':
-            self.data_obj = Data_AVA()
+            self.data_obj = Data_AVA(self.batch_size, self.no_gpus)
             
 
         

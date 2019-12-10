@@ -18,6 +18,10 @@ import tensorflow as tf
 import logging
 import subprocess
 
+from sklearn.metrics import average_precision_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import precision_score
+
 
 class Data_AVA:
 
@@ -753,42 +757,42 @@ def IoU_box(box1, box2):
     IoU = areaIntersection / float(area1 + area2 - areaIntersection)
     return IoU
 
-def update_rois(detections, sample_annotations, H, W):
-    #import pdb;pdb.set_trace()
-    for ann in sample_annotations:
-        left, top, right, bottom = ann['bbox']
-        ann['bbox'] = update_rois_with_crop(left,top, right, bottom,H,W)
-    for det in detections:
-        top, left, bottom, right = det['box']
-        uleft, utop, uright, ubottom = update_rois_with_crop(left,top, right, bottom,H,W)
-        det['box'] = [utop, uleft, ubottom, uright]
+# def update_rois(detections, sample_annotations, H, W):
+#     #import pdb;pdb.set_trace()
+#     for ann in sample_annotations:
+#         left, top, right, bottom = ann['bbox']
+#         ann['bbox'] = update_rois_with_crop(left,top, right, bottom,H,W)
+#     for det in detections:
+#         top, left, bottom, right = det['box']
+#         uleft, utop, uright, ubottom = update_rois_with_crop(left,top, right, bottom,H,W)
+#         det['box'] = [utop, uleft, ubottom, uright]
 
-def update_rois_with_crop(left, top, right, bottom, H, W, crop='center'):
-    dim = 400
-    multiplier = dim / float(min(H,W))
-    new_H, new_W = int(H*multiplier), int(W*multiplier)
-    #reshaped = cv2.resize(frame, (new_W,new_H))
-    h_diff = (new_H - dim) // 2
-    w_diff = (new_W - dim) // 2
-    #cropped = reshaped[h_diff:h_diff+dim, w_diff:w_diff+dim,:]
-    left_offset = w_diff / float(W)
-    right_offset = w_diff / float(W)
-    top_offset = h_diff / float(H)
-    bottom_offset = h_diff / float(H)
+# def update_rois_with_crop(left, top, right, bottom, H, W, crop='center'):
+#     dim = 400
+#     multiplier = dim / float(min(H,W))
+#     new_H, new_W = int(H*multiplier), int(W*multiplier)
+#     #reshaped = cv2.resize(frame, (new_W,new_H))
+#     h_diff = (new_H - dim) // 2
+#     w_diff = (new_W - dim) // 2
+#     #cropped = reshaped[h_diff:h_diff+dim, w_diff:w_diff+dim,:]
+#     left_offset = w_diff / float(W)
+#     right_offset = w_diff / float(W)
+#     top_offset = h_diff / float(H)
+#     bottom_offset = h_diff / float(H)
     
-    left_crop = left_offset
-    right_crop = 1.0 - right_offset
-    top_crop = top_offset
-    bottom_crop = 1.0 - bottom_offset
+#     left_crop = left_offset
+#     right_crop = 1.0 - right_offset
+#     top_crop = top_offset
+#     bottom_crop = 1.0 - bottom_offset
     
-    # update box_coords
-    #top, left, bottom, right = cur_rois[:,0], cur_rois[:,1], cur_rois[:,2], cur_rois[:,3]
-    updated_left   = (left - left_offset) / (1.0 - left_offset - right_offset)
-    updated_right  = (right - left_offset) / (1.0 - left_offset - right_offset)
+#     # update box_coords
+#     #top, left, bottom, right = cur_rois[:,0], cur_rois[:,1], cur_rois[:,2], cur_rois[:,3]
+#     updated_left   = (left - left_offset) / (1.0 - left_offset - right_offset)
+#     updated_right  = (right - left_offset) / (1.0 - left_offset - right_offset)
     
-    updated_top    = (top - top_offset) / (1.0 - top_offset - bottom_offset)
-    updated_bottom = (bottom - top_offset) / (1.0 - top_offset - bottom_offset)
-    return updated_left, updated_top, updated_right, updated_bottom
+#     updated_top    = (top - top_offset) / (1.0 - top_offset - bottom_offset)
+#     updated_bottom = (bottom - top_offset) / (1.0 - top_offset - bottom_offset)
+#     return updated_left, updated_top, updated_right, updated_bottom
     
 ############ Tests
 
