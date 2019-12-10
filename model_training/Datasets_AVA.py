@@ -1,0 +1,1094 @@
+# AVA
+
+import os
+
+# import __main__ as main
+# if os.path.basename(main.__file__) == 'result_validation.py' or os.path.basename(main.__file__) == 'visualize_ava_style_results.py':
+#     print('Called from %s, not importing tensorflow' % os.path.basename(main.__file__))
+# else:
+#     import tensorflow as tf
+
+import numpy as np
+import json
+import cv2
+import imageio
+import random
+import tensorflow as tf
+
+import logging
+import subprocess
+
+
+class Data_AVA:
+
+    def __init__(self, batch_size=1, no_gpus=1, run_test = False):
+        self.batch_size = batch_size
+        self.no_gpus = no_gpus
+        self.run_test = run_test
+
+        self.PREPROCESS_CORES = 10
+        self.BUFFER_SIZE = 1
+
+        self.INPUT_H = 400
+        self.INPUT_W = 400
+        #INPUT_H = 500
+        #INPUT_W = 500
+        self.INPUT_T = 32
+        # INPUT_T = 16
+        
+        self.KEY_FRAME_INDEX = 2
+        
+        self.NUM_CLASSES = 60
+        
+        # AVA_FOLDER = '/media/sidious_data/AVA'
+        self.ACAM_FOLDER = os.environ['ACAM_DIR']
+
+        self.AVA_FOLDER = self.ACAM_FOLDER + '/data/AVA' 
+        self.SEGMENTS_FOLDER = self.AVA_FOLDER + '/segments/'
+        #TFRECORDS_FOLDER = AVA_FOLDER + '/tfrecords/'
+        self.TFRECORDS_FOLDER = self.AVA_FOLDER + '/tfrecords_labels/'
+        self.DATA_FOLDER = self.AVA_FOLDER + '/data/'
+
+        # AVA_FOLDER = ACAM_FOLDER + '/data/AVA' 
+
+        self.MODEL_SAVER_PATH = self.AVA_FOLDER + '/ckpts/model_ckpt'
+        self.RESULT_SAVE_PATH = self.AVA_FOLDER + '/ActionResults/'
+
+        self.USE_TFRECORD = True
+        
+        # max amount of rois in a single image
+        # this initializes the roi vector sizes as well
+        #MAX_ROIS = 100
+        self.MAX_ROIS = 50
+        #MAX_ROIS = 10
+        # TEMP_RESOLUTION = 32
+
+        self.USE_GROUND_TRUTH_BOXES = False
+
+        self.MAX_ROIS_IN_TRAINING = 15
+
+
+        #UPDATE_FOR_CROPS = True
+        self.UPDATE_FOR_CROPS = False
+        # USE_TRACKER_TEMPORAL_ROIS = False
+        
+        
+        with open(self.DATA_FOLDER+'label_conversions.json') as fp:
+            self.LABEL_CONVERSIONS = json.load(fp)
+        
+        self.ANN2TRAIN = self.LABEL_CONVERSIONS['ann2train']
+        self.TRAIN2ANN = self.LABEL_CONVERSIONS['train2ann']
+        
+        _split = 'train'
+        annotations_path = self.DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
+        with open(annotations_path) as fp:
+            self.ANNOS_TRAIN = json.load(fp)
+        
+        _split = 'val'
+        annotations_path = self.DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
+        #annotations_path = DATA_FOLDER + 'segment_annotations_v21_%s.json' % _split
+        with open(annotations_path) as fp:
+            self.ANNOS_VAL = json.load(fp)
+        
+
+        _split = 'test'
+        annotations_path = self.DATA_FOLDER + 'segment_annotations_v22_%s.json' % _split
+        with open(annotations_path) as fp:
+            self.ANNOS_TEST = json.load(fp)
+
+        with open(self.DATA_FOLDER + 'action_lists_train.json') as fp: 
+            self.TR_LISTS = json.load(fp)
+
+        self.FOCUS_ON_CLASSES = False
+        #FOCUS_ON_CLASSES = True
+        self.ACTIONS_TO_FOCUS = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)", "point to (an object)"]
+        #ACTIONS_TO_FOCUS = ["text on/look at a cellphone"]
+        #ACTIONS_TO_FOCUS = ["shoot"]
+
+
+    def get_train_list(self):
+        samples = self.ANNOS_TRAIN.keys()
+        samples.sort()
+        if self.FOCUS_ON_CLASSES:
+            return self.filter_list_for_actions(self.ANNOS_TRAIN, samples)
+        else:
+            return  samples  
+        # train on both train+val
+        #samples_val = ANNOS_VAL.keys()
+        #samples_val.sort()
+        #return samples + samples_val
+        ## with open(DATA_FOLDER + 'segment_keys_train_detections_only_th_020.json') as fp:
+        #with open(DATA_FOLDER + 'segment_keys_train_detections_only.json') as fp:
+        #    train_detection_segments = json.load(fp)
+
+        #return train_detection_segments
+        #detected_set = set(train_detection_segments)
+        ## if we want to focus on some classes
+        #with open(DATA_FOLDER + 'action_lists_train.json') as fp:
+        #    act_list = json.load(fp)
+        #filtered_segments = []
+        ##for ii in range(15,64): # all objects
+        #for ii in range(62,63): # working on computer
+        #    if str(ii) in act_list.keys():
+        #        class_vids = act_list[str(ii)]
+        #        for vid in class_vids:
+        #            vid_id = vid[0]
+        #            if vid_id in detected_set:
+        #                filtered_segments.append(vid_id)
+        #filtered_segments = list(set(filtered_segments))
+        #filtered_segments.sort()
+        #return filtered_segments
+
+    
+    def get_val_list(self):
+        samples = self.ANNOS_VAL.keys()
+        samples.sort()
+        if self.FOCUS_ON_CLASSES:
+            return self.filter_list_for_actions(self.ANNOS_VAL, samples)
+        else:
+            return  samples
+        # with open(DATA_FOLDER + 'segment_keys_val_detections_only.json') as fp:
+        #     val_detection_segments = json.load(fp)
+        # return val_detection_segments
+        #detected_set = set(val_detection_segments)
+        ## if we want to focus on some classes
+        #with open(DATA_FOLDER + 'action_lists_val.json') as fp:
+        #    act_list = json.load(fp)
+        #filtered_segments = []
+        ##for ii in range(15,64): # all objects
+        #for ii in range(62,63): # working on computer
+        #    if str(ii) in act_list.keys():
+        #        class_vids = act_list[str(ii)]
+        #        for vid in class_vids:
+        #            vid_id = vid[0]
+        #            if vid_id in detected_set:
+        #                filtered_segments.append(vid_id)
+        #filtered_segments = list(set(filtered_segments))
+        #filtered_segments.sort()
+        #return filtered_segments
+
+    def get_test_list(self):
+        samples = self.ANNOS_TEST.keys()
+        samples.sort()
+        return  samples  
+        # with open(DATA_FOLDER + 'segment_keys_test_detections_only.json') as fp:
+        #     test_detection_segments = json.load(fp)
+        # return test_detection_segments
+
+
+    def filter_list_for_actions(self, annos, samples):
+        #actions_to_focus = ["point to (an object)", "turn (e.g., a screwdriver)", "hit (an object)", "work on a computer", "cut", "take a photo", "enter", "shoot", "jump/leap", "climb (e.g., a mountain)", "throw"]
+        #actions_to_focus = ["point to (an object)"]
+        #actions_to_focus = ["give/serve (an object) to (a person)", "hand shake", "lift/pick up", "pull (an object)", "push (an object)", "put down", "shoot", "text on/look at a cellphone", "answer phone", "bend/bow (at the waist)", "take (an object) from (a person)"]
+        cls_nos = self.ANN2TRAIN.keys()
+
+        #tr_sizes = {ANN2TRAIN[cls_no_str]['class_str']: len(TR_LISTS[cls_no_str]) for cls_no_str in cls_nos}
+        #size_th = 1000
+        #actions_to_focus = [ANN2TRAIN[cls_no_str]['class_str'] for cls_no_str in cls_nos if len(TR_LISTS[cls_no_str])<size_th]
+        #actions_to_focus = [ANN2TRAIN[cls_no_str]['class_str'] for cls_no_str in cls_nos if len(TR_LISTS[cls_no_str])>1000 and len(TR_LISTS[cls_no_str])<3000  ]
+
+        print("Focusing on actions %s" % (','.join(self.ACTIONS_TO_FOCUS)))
+        actions_to_focus = set(self.ACTIONS_TO_FOCUS)
+        actions_ann_ids = []
+        for ann_id in self.ANN2TRAIN:
+            if self.ANN2TRAIN[ann_id]['class_str'] in actions_to_focus:
+                actions_ann_ids.append(ann_id)
+        
+        actions_ann_ids = set(actions_ann_ids)
+        new_sample_list = []
+        for sample in samples:
+          for box in annos[sample]:
+            for annotation_action in box['actions']:
+                if annotation_action in actions_ann_ids:
+                    new_sample_list.append(sample)
+                    break
+        # add some random samples 
+        #random.seed(10)
+        random_samples = random.sample(samples, 2000)
+        new_sample_list.extend(random_samples)
+        
+        return new_sample_list
+        
+
+    # Python Functions
+    def get_data(self, segment_key, split):
+    
+        sample = self.get_video_frames(segment_key,split)
+        labels_np, rois_np, no_det = self.get_labels(segment_key,split)
+        ## DEBUGGING
+        #sample = DEBUG_SAMPLE
+        #sample = get_video_frames(DEBUG_SEGMENT,'train')
+        #labels_np, rois_np, no_det = get_labels(DEBUG_SEGMENT,'train')
+        #labels_np, rois_np, no_det = LABELS_NP, ROIS_NP, NO_DET 
+    
+        return sample, labels_np, rois_np, no_det, segment_key
+
+    def get_video_frames(self, segment_key, split):
+        # Uses imageio - ffmpeg
+        # split = sample_info['split']
+        # segment_key = sample_info['segment_key']
+        # print(segment_key, split)
+        movie_key, timestamp = segment_key.split('.')
+    
+        vid_path = os.path.join(self.SEGMENTS_FOLDER, split, 'clips', movie_key, '%s.mp4' % timestamp)
+    
+
+        video = imageio.get_reader(vid_path, 'ffmpeg')
+        # vcap = cv2.VideoCapture(vid_path)
+    
+        # vidfps = vcap.get(cv2.CAP_PROP_FPS)
+        # vid_W = vcap.get(cv2.CAP_PROP_FRAME_WIDTH)  # float
+        # vid_H = vcap.get(cv2.CAP_PROP_FRAME_HEIGHT) # float
+        # no_frames = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
+        vidinfo = video.get_meta_data()
+        # vidfps = vidinfo['fps']
+        # vid_W, vid_H = vidinfo['size']
+        no_frames = vidinfo['nframes']-1 # last frames seem to be bugged
+    
+        f_timesteps, f_H, f_W, f_C = [self.INPUT_T, self.INPUT_H, self.INPUT_W, 3]
+    
+        slope = (no_frames-1) / float(f_timesteps - 1)
+        indices = (slope * np.arange(f_timesteps)).astype(np.int64)
+    
+        sample = np.zeros([f_timesteps, f_H, f_W, f_C], np.uint8)
+    
+        timestep = 0
+        # for vid_idx in range(no_frames):
+        for vid_idx in indices.tolist():
+            frame = video.get_data(vid_idx)
+            # frame = frame[:,:,::-1] #opencv reads bgr, i3d trained with rgb
+            reshaped = cv2.resize(frame, (f_W, f_H))
+            sample[timestep, :, :, :] = reshaped
+            timestep += 1
+    
+        video.close()
+        return sample.astype(np.float32)
+    
+    def get_labels(self, segment_key,split):
+        # sample_annotations = sample_info['annotations']
+        # segment_key = sample_info['segment_key']
+        if split == 'train': annos = self.ANNOS_TRAIN
+        elif split == 'val': annos = self.ANNOS_VAL
+        elif split == 'test': annos = self.ANNOS_TEST
+        else: raise KeyError
+        
+        sample_annotations = annos[segment_key]
+        
+        
+        # if not USE_TRACKER_TEMPORAL_ROIS:
+        #     detections = get_obj_detection_results(segment_key,split)
+        #     labels_np, rois_np, no_det = match_annos_with_detections(sample_annotations, detections, split)
+    
+        # if USE_TRACKER_TEMPORAL_ROIS:
+        #     obj_detections = get_obj_detection_results(segment_key,split) # I need this because tracker bboxes are in pixel values and height and width are saved in object detections
+        #     keyframe_detections, rois_np, no_det = get_tracker_rois(segment_key,split, obj_detections)
+        #     labels_np, _, _ = match_annos_with_detections(sample_annotations, keyframe_detections, split)
+
+        detections, H, W = self.get_obj_detection_results(segment_key,split)
+        if self.UPDATE_FOR_CROPS:
+            update_rois(detections, sample_annotations, H, W)
+        
+        labels_np, rois_np, no_det = self.match_annos_with_detections(sample_annotations, detections, split)
+        
+        return labels_np, rois_np, no_det
+    
+    def get_obj_detection_results(self, segment_key,split):
+        # split = sample_info['split']
+        # segment_key = sample_info['segment_key']
+    
+        # KEY_FRAME_INDEX = 2
+        movie_key, timestamp = segment_key.split('.')
+        ## object detection results
+        #obj_detects_folder = AVA_FOLDER + '/objects/' + split + '/'
+        # finetuned
+        obj_detects_folder = self.AVA_FOLDER + '/objects_finetuned_mrcnn/' + split + '/'
+        ## ava detection results
+        #obj_detects_folder = AVA_FOLDER + '/ava_trained_persons/' + split + '/object_detections/'
+        segment_objects_path = os.path.join(obj_detects_folder, movie_key, '%s.json' %timestamp )
+        
+        with open(segment_objects_path) as fp:
+            results = json.load(fp)
+    
+        detections = results['detections']
+        H = results['height']
+        W = results['width']
+    
+        # filter out non-person detections
+        detections = [det for det in detections if det['class_str'] == 'person']
+        # filter out detection confidences so that i can train efficiently
+        if split == 'train':
+            #detections = [det for det in detections if det['score'] > 0.90]
+            if len(detections) > self.MAX_ROIS_IN_TRAINING:
+                # they are sorted by confidence already, take top #k
+                detections = detections[:self.MAX_ROIS_IN_TRAINING]
+        else:
+            #detections = [det for det in detections if det['score'] > 0.70]
+            if len(detections) > self.MAX_ROIS:
+                # they are sorted by confidence already, take top #k
+                detections = detections[:self.MAX_ROIS]
+            
+
+        # just so I can use these in get_tracker
+        #detections[0]['height'] = H 
+        #detections[0]['width'] = W
+        # detections[0]['frame_nos'] = results['frame_nos']
+        return detections, H, W
+        # detections = [{"box": [0.07, 0.006, 0.981, 0.317], "class_str": "person", "score": 0.979, "class_no": 1},
+
+
+    ## filters samples with no detected people!!!!
+    def filter_no_detections(self, sample, labels_np, rois_np, no_det, segment_key):
+        rois_bool = tf.cast(rois_np, tf.bool)
+        return tf.reduce_any(rois_bool)
+
+    def get_tfrecord(self, serialized_example):
+        
+        # Prepare feature list; read encoded JPG images as bytes
+        features = dict()
+        #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+        features["frames"] = tf.VarLenFeature(tf.string)
+        features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+        #features["filename"] = tf.FixedLenFeature((), tf.string)
+        features['movie'] = tf.FixedLenFeature((), tf.string)
+        features['segment'] = tf.FixedLenFeature((), tf.string)
+
+
+        # tflabels
+        features['no_det'] = tf.FixedLenFeature((), tf.int64)
+        features['segment_key'] = tf.FixedLenFeature((), tf.string)
+        features['labels'] = tf.FixedLenFeature((self.MAX_ROIS,self.NUM_CLASSES), tf.int64)
+        features['rois'] = tf.FixedLenFeature((self.MAX_ROIS,4), tf.float32)
+
+        
+        # Parse into tensors
+        parsed_features = tf.parse_single_example(serialized_example, features)
+        
+        # Randomly sample offset from the valid range.
+        #random_offset = tf.random_uniform(
+        #    shape=(), minval=0,
+        #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+        
+        #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+        
+        # Decode the encoded JPG images
+        #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+        sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+        #sample = tf.map_fn(lambda i: tf.decode_raw(parsed_features["frames"].values[i], tf.uint8), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+        #sample = tf.reshape(sample, [INPUT_T,INPUT_H,INPUT_W,3])
+        #sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+
+        if self.INPUT_H != 400:
+            sample = tf.image.resize_images(sample, [self.INPUT_H, self.INPUT_W])
+        
+        #label  = tf.cast(parsed_features["class_label"], tf.int64)
+        #label = parsed_features['filename']
+        #labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment']], [ tf.int32, tf.float32, tf.int64, tf.string])
+        labels_np = tf.reshape(parsed_features['labels'], [self.MAX_ROIS, self.NUM_CLASSES])
+        rois_np = tf.reshape(parsed_features['rois'], [self.MAX_ROIS, 4])
+        no_det = parsed_features['no_det']
+        segment_key = parsed_features['segment_key']
+
+        ##
+        labels_np = labels_np[:self.MAX_ROIS_IN_TRAINING, :]
+        rois_np = rois_np[:self.MAX_ROIS_IN_TRAINING, :]
+        no_det = tf.minimum(no_det, self.MAX_ROIS_IN_TRAINING)
+
+        
+        
+        return sample, labels_np, rois_np, no_det, segment_key
+
+    def generate_tfrecord_list(self, detection_segments):
+        #train_path = "/home/ulutan/work/train_tfrecords/"
+        #val_path = "/data/ulutan/AVA/tfrecords/val_tfrecords/"
+        #records_path = train_path if split == 'train' else val_path
+
+        tfrecord_list = []
+        for segment_key in detection_segments:
+            split = self.check_split(segment_key)
+            records_path = os.path.join(self.TFRECORDS_FOLDER, split)
+            #records_path = os.path.join(TFRECORDS_FOLDER, split+"_v2")
+            movie, segment = segment_key.split(".")
+            t_path = os.path.join(records_path, movie, "%s.tfrecord" % segment)
+            tfrecord_list.append(t_path)
+
+        return tfrecord_list
+
+    def setup_tfdatasets(self):
+        train_detection_segments = self.get_train_list()    
+        split = 'train'
+
+        #               [sample, labels_np, rois_np, no_det, segment_key] 
+        output_types = [tf.uint8, tf.int64, tf.float32, tf.int64, tf.string]
+        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+
+        # shuffle the list outside tf so I know the order. 
+        #np.random.seed(5)
+        # np.random.seed(7)
+        np.random.shuffle(train_detection_segments)
+
+
+        if self.USE_TFRECORD:
+            tfrecord_list = self.generate_tfrecord_list(train_detection_segments)
+            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=self.PREPROCESS_CORES)
+            #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
+            #dataset = dataset.shuffle(len(tfrecord_list)//3)
+            dataset = dataset.shuffle(len(tfrecord_list)//8)
+            dataset = dataset.repeat()# repeat infinitely
+            #dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
+            dataset = dataset.map(self.get_tfrecord, num_parallel_calls=self.PREPROCESS_CORES)
+
+        else:
+            dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(lambda seg_key, c_split: 
+                    tuple(tf.py_func(self.get_data, [seg_key,c_split], output_types)),
+                    num_parallel_calls=self.PREPROCESS_CORES)
+
+        # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
+        #                                 cycle_length=10, block_length=1)
+        dataset = dataset.filter(self.filter_no_detections)
+        #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 200)
+        #dataset = dataset.prefetch(buffer_size=BUFFER_SIZE * self.no_gpus)
+        dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
+        dataset = dataset.prefetch(buffer_size=self.BUFFER_SIZE)
+        self.training_dataset = dataset
+        self.train_detection_segments = train_detection_segments
+        
+        if not self.run_test:
+            val_detection_segments = self.get_val_list()
+            split = 'val'
+                
+        else:
+            val_detection_segments = self.get_test_list()
+            split = 'test'
+        
+
+        #               [sample, labels_np, rois_np, no_det, segment_key] 
+        # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+
+        # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
+        #if not self.evaluate:
+        #if True:
+        #    np.random.seed(10)
+        #    np.random.shuffle(val_detection_segments)
+
+
+        if self.USE_TFRECORD:
+            tfrecord_list = self.generate_tfrecord_list(val_detection_segments)
+            #tfrecord_list = tf.data.Dataset.list_files("/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-*-of-00010")
+            #tfrecord_list = ["/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-00001-of-00010"]
+            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=self.PREPROCESS_CORES)
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(self.get_tfrecord, num_parallel_calls=self.PREPROCESS_CORES)
+        
+        else:
+            dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
+            dataset = dataset.repeat()# repeat infinitely
+            dataset = dataset.map(lambda seg_key, c_split: 
+                    tuple(tf.py_func(self.get_data, [seg_key,c_split], output_types)),
+                    num_parallel_calls=self.PREPROCESS_CORES * self.no_gpus)
+
+            
+        # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        dataset = dataset.filter(self.filter_no_detections)
+        dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
+        dataset = dataset.prefetch(buffer_size=self.BUFFER_SIZE)
+        self.validation_dataset = dataset
+        self.val_detection_segments = val_detection_segments
+
+        # skip validation
+        # self.val_detection_segments = val_detection_segments[:200]
+        
+
+
+        #### configure the input selector
+        self.input_handle = tf.placeholder(tf.string, shape=[])
+        iterator = tf.data.Iterator.from_string_handle( self.input_handle, self.training_dataset.output_types, self.training_dataset.output_shapes)
+
+        next_element = iterator.get_next()
+
+        # Define shapes of the inputs coming from python functions
+        input_batch, labels, rois, no_dets, segment_keys = next_element
+
+        # input_batch = tf.cast(input_batch, tf.float32)
+
+        input_batch.set_shape([None, self.INPUT_T, self.INPUT_H, self.INPUT_W, 3])
+        #labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
+        labels.set_shape([None, self.MAX_ROIS_IN_TRAINING, self.NUM_CLASSES])
+        #rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
+        rois.set_shape([None, self.MAX_ROIS_IN_TRAINING, 4])
+        no_dets.set_shape([None])
+        segment_keys.set_shape([None])
+        
+
+        self.input_batch = input_batch
+        self.labels =labels
+        self.rois = rois
+        self.no_dets = no_dets
+        self.segment_keys = segment_keys
+
+        return input_batch, labels, rois, no_dets, segment_keys
+
+    def check_split(self, segment_key):
+        if segment_key in self.ANNOS_TRAIN:
+            return "train"
+        if segment_key in self.ANNOS_VAL:
+            return "val"
+        if segment_key in self.ANNOS_TEST:
+            return "test"
+
+    def initialize_data_iterators(self, sess):
+        self.training_iterator = self.training_dataset.make_one_shot_iterator()
+        self.validation_iterator = self.validation_dataset.make_initializable_iterator()
+
+        # The `Iterator.string_handle()` method returns a tensor that can be evaluated
+        # and used to feed the `handle` placeholder.
+        self.training_handle = sess.run(self.training_iterator.string_handle())
+        self.validation_handle = sess.run(self.validation_iterator.string_handle())
+        
+        sess.run(self.validation_iterator.initializer)
+
+    def select_iterator(self, feed_dict, is_training):
+        if is_training:
+            feed_dict[self.input_handle] = self.training_handle
+        else:
+            feed_dict[self.input_handle] = self.validation_handle
+
+
+
+ 
+    
+    def match_annos_with_detections(self, annotations, detections, split):
+        MATCHING_IOU = 0.5
+        gt_boxes = []
+        for ann in annotations:
+            # left, top, right, bottom
+            # [0.07, 0.141, 0.684, 1.0]
+            cur_box = ann['bbox'] 
+            gt_boxes.append(cur_box)
+    
+        det_boxes = []
+        for detection in detections:
+            # top, left, bottom, right
+            # [0.07, 0.006, 0.981, 0.317]
+            top, left, bottom, right = detection['box'] 
+            box = left, top, right, bottom
+            class_label = detection['class_str']
+            det_boxes.append(box)
+    
+        if self.USE_GROUND_TRUTH_BOXES and split != 'test':
+            # FOR DEBUGGING PURPOSES
+            det_boxes = gt_boxes
+    
+        no_gt = len(gt_boxes)
+        no_det = len(det_boxes)
+    
+        iou_mtx = np.zeros([no_gt, no_det])
+    
+        for gg in range(no_gt):
+            gt_box = gt_boxes[gg]
+            for dd in range(no_det):
+                dt_box = det_boxes[dd]
+                iou_mtx[gg,dd] = IoU_box(gt_box, dt_box)
+    
+        # assume less than #MAX_ROIS boxes in each image
+        if no_det > self.MAX_ROIS: print('MORE DETECTIONS THAN MAX ROIS!!')
+        labels_np = np.zeros([self.MAX_ROIS, self.NUM_CLASSES], np.int64)
+        rois_np = np.zeros([self.MAX_ROIS, 4], np.float32) # the 0th index will be used as the featmap index
+    
+        # TODO if no_gt or no_det is 0 this will give error
+        # This is fixed within functions calling this
+        if split != 'test':
+            if no_gt != 0 and no_det != 0:
+                max_iou_for_each_det = np.max(iou_mtx, axis=0)
+                index_for_each_det = np.argmax(iou_mtx, axis=0)
+                
+    
+                for dd in range(no_det):
+                    cur_max_iou = max_iou_for_each_det[dd]
+    
+                    if not self.USE_GROUND_TRUTH_BOXES:
+                        top, left, bottom, right = detections[dd]['box']
+                    else:
+                        ## DEBUGGING
+                        left, top, right, bottom = annotations[dd]['bbox']
+    
+                    # # region of interest layer expects
+                    # # regions of interest as lists of:
+                    # # feature map index, upper left, bottom right coordinates
+                    rois_np[dd,:] = [top, left, bottom, right]
+                    if cur_max_iou < MATCHING_IOU:
+                        continue
+                    matched_ann = annotations[index_for_each_det[dd]]
+                    actions = matched_ann['actions'] # "actions": ["14", "17", "79"]
+                    benchmark_actions = [self.ANN2TRAIN[action]['train_id'] for action in actions if action in self.ANN2TRAIN.keys()]
+                    for b_action in benchmark_actions:
+                        labels_np[dd,b_action] = 1 # could be multiple 1s
+        else:
+            for dd in range(no_det):
+                top, left, bottom, right = detections[dd]['box']
+                rois_np[dd,:] = [top, left, bottom, right]
+    
+        return labels_np, rois_np, no_det
+
+
+    def process_evaluation_results_old(self, res_name):
+        
+        logging.info('Generating ava style results')
+        subprocess.call(['python', self.ACAM_FOLDER + '/model_training/result_validation.py', '--result_name', res_name])
+        
+        logging.info('Calculating final AP values')
+        subprocess.call(['bash', self.ACAM_FOLDER + '/evaluation/run_ava_detection.sh', res_name])
+        
+        logging.info('Done!')
+
+
+    def process_evaluation_results(self, res_name):
+        
+        logging.info('Generating ava style results')
+        subprocess.call(['python', self.ACAM_FOLDER + '/model_training/result_validation_v2.py', '--result_name', res_name])
+        
+        logging.info('Calculating final AP values')
+        subprocess.call(['bash', self.ACAM_FOLDER + '/evaluation/run_ava_detection.sh', res_name])
+        
+        logging.info('Done!')
+
+    def get_per_class_AP(self, results_list):
+        '''
+        results_list is a list where each
+        result = ['path' [multilabel-binary labels] [probs vector]]
+
+        returns per class_AP vector with class average precisions
+        '''
+        class_results = [{'truth':[], 'pred':[]} for _ in range(self.NUM_CLASSES)]
+
+        for result in results_list:
+            cur_key = result[0]
+            cur_roi_id = result[1]
+            cur_truths = result[2]
+            cur_preds = result[3]
+            
+            # cur_preds = np.random.uniform(size=40)
+            # cur_preds = [0 for _ in range(40)]
+
+            for cc in range(NUM_CLASSES):
+                class_results[cc]['truth'].append(cur_truths[cc])
+                class_results[cc]['pred'].append(cur_preds[cc])
+
+        ground_truth_count = []
+        class_AP = []
+        class_recall = []
+        class_prec = []
+        for cc in range(self.NUM_CLASSES):
+            y_truth = class_results[cc]['truth']
+            y_pred = class_results[cc]['pred']
+            AP = average_precision_score(y_truth, y_pred)
+            recall_th = 0.50
+            recall = recall_score(y_truth, np.array(y_pred) > recall_th) 
+            precision = precision_score(y_truth, np.array(y_pred) > recall_th)
+            class_recall.append(recall)
+            class_prec.append(precision)
+
+            # print(AP)
+            # plot_pr_curve(y_truth, y_pred)
+            # import pdb; pdb.set_trace()
+
+            if np.isnan(AP): AP = 0
+
+            class_AP.append(AP)
+            ground_truth_count.append(sum(y_truth))
+            
+        # import pdb; pdb.set_trace()
+        return class_AP, ground_truth_count, class_recall, class_prec
+
+    def get_class_AP_str(self, class_AP, cnt, class_recall, class_prec):
+        ''' Returns a printable string'''
+        ap_str = ''
+        for cc in range(self.NUM_CLASSES):
+            class_str = self.TRAIN2ANN[str(cc)]['class_str'][0:15] # just take the first 15 chars, some of them are too long
+            class_cnt = cnt[cc]
+            AP = class_AP[cc]
+            rec = class_recall[cc]
+            prec = class_prec[cc]
+            # AP = AP if not np.isnan(AP) else 0
+            # cur_row = '%s:    %i%% \n' %(class_str, AP*100)#class_str + ':    ' + str(tools.get_3_decimal_float(AP)) + '\n'
+            cur_row = class_str + '(%i)' % class_cnt + ':'
+            cur_row += (' ' * (25 -len(cur_row))) + '%.1f%%' % (AP*100.0) + "\t" + '%.1f%%' % (rec*100.0) + "\t" + '%.1f%%' % (prec*100.0) + '\n'
+            ap_str += cur_row
+        class_avg = np.mean(class_AP)
+        avg_rec = np.mean(class_recall)
+        avg_prec = np.mean(class_prec)
+        # class_avg = class_avg if not np.isnan(class_avg) else 0
+        ap_str += '\n' + 'Average:' + (' '*17) + '%.1f%%' % (class_avg*100.0) + "\t" + "%.1f%%" % (avg_rec*100.) + "\t" + "%.1f%%" % (avg_prec*100.) + '\n'
+        return ap_str
+
+    def get_AP_str(self, results_list):
+        class_AP, cnt, class_recall, class_prec = self.get_per_class_AP(results_list)
+        ap_str = self.get_class_AP_str(class_AP, cnt, class_recall, class_prec)
+        return ap_str
+ 
+ 
+def IoU_box(box1, box2):
+    '''
+    left1, top1, right1, bottom1 = box1
+    left2, top2, right2, bottom2 = box2
+ 
+    returns intersection over union
+    '''
+    left1, top1, right1, bottom1 = box1
+    left2, top2, right2, bottom2 = box2
+ 
+    left_int = max(left1, left2)
+    top_int = max(top1, top2)
+ 
+    right_int = min(right1, right2)
+    bottom_int = min(bottom1, bottom2)
+ 
+    areaIntersection = max(0, right_int - left_int) * max(0, bottom_int - top_int)
+ 
+    area1 = (right1 - left1) * (bottom1 - top1)
+    area2 = (right2 - left2) * (bottom2 - top2)
+     
+    IoU = areaIntersection / float(area1 + area2 - areaIntersection)
+    return IoU
+
+def update_rois(detections, sample_annotations, H, W):
+    #import pdb;pdb.set_trace()
+    for ann in sample_annotations:
+        left, top, right, bottom = ann['bbox']
+        ann['bbox'] = update_rois_with_crop(left,top, right, bottom,H,W)
+    for det in detections:
+        top, left, bottom, right = det['box']
+        uleft, utop, uright, ubottom = update_rois_with_crop(left,top, right, bottom,H,W)
+        det['box'] = [utop, uleft, ubottom, uright]
+
+def update_rois_with_crop(left, top, right, bottom, H, W, crop='center'):
+    dim = 400
+    multiplier = dim / float(min(H,W))
+    new_H, new_W = int(H*multiplier), int(W*multiplier)
+    #reshaped = cv2.resize(frame, (new_W,new_H))
+    h_diff = (new_H - dim) // 2
+    w_diff = (new_W - dim) // 2
+    #cropped = reshaped[h_diff:h_diff+dim, w_diff:w_diff+dim,:]
+    left_offset = w_diff / float(W)
+    right_offset = w_diff / float(W)
+    top_offset = h_diff / float(H)
+    bottom_offset = h_diff / float(H)
+    
+    left_crop = left_offset
+    right_crop = 1.0 - right_offset
+    top_crop = top_offset
+    bottom_crop = 1.0 - bottom_offset
+    
+    # update box_coords
+    #top, left, bottom, right = cur_rois[:,0], cur_rois[:,1], cur_rois[:,2], cur_rois[:,3]
+    updated_left   = (left - left_offset) / (1.0 - left_offset - right_offset)
+    updated_right  = (right - left_offset) / (1.0 - left_offset - right_offset)
+    
+    updated_top    = (top - top_offset) / (1.0 - top_offset - bottom_offset)
+    updated_bottom = (bottom - top_offset) / (1.0 - top_offset - bottom_offset)
+    return updated_left, updated_top, updated_right, updated_bottom
+    
+############ Tests
+
+if __name__ == '__main__':
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+    ava = Data_AVA()
+
+    vallist = ava.get_val_list()
+
+    # test basic functions
+    segment_key = vallist[0]
+    split = 'val'
+    obj = ava.get_obj_detection_results(segment_key, split)
+    frames = ava.get_video_frames(segment_key, split)
+    np_sample = ava.get_data(segment_key, split)
+
+    # test tfrecords
+    sess = tf.Session()
+    init_op = tf.global_variables_initializer()
+    sess.run(init_op)
+    
+    input_batch, labels, rois, no_dets, segment_keys = ava.setup_tfdatasets()
+    
+    ava.initialize_data_iterators(sess)
+
+    feed_dict = {}
+    ava.select_iterator(feed_dict, is_training=True)
+    np_stuff = sess.run([input_batch, labels, rois, no_dets, segment_keys], feed_dict)
+
+    feed_dict = {}
+    ava.select_iterator(feed_dict, is_training=False)
+    np_stuff = sess.run([input_batch, labels, rois, no_dets, segment_keys], feed_dict)
+
+    # import pdb;pdb.set_trace()
+
+    print('Tests Passed!')
+
+
+  
+
+
+# # Testing functions
+# def _test_dataset_cropping():
+#     import tensorflow as tf
+#     split = 'train'
+#     # temp_rois = USE_TRACKER_TEMPORAL_ROIS
+#     annotations_path = DATA_FOLDER + 'segment_annotations_%s.json' % split
+#     with open(annotations_path) as fp:
+#         annotations = json.load(fp)
+ 
+#     segment_keys = annotations.keys()
+#     segment_keys.sort()
+#     # with open('segment_keys_%s_detections_only.json' % split) as fp:
+#     #     val_detection_segments = json.load(fp)
+#     # from tqdm import tqdm
+#     # segment_keys = val_detection_segments
+     
+#     np.random.seed(5)
+#     np.random.shuffle(segment_keys)
+ 
+#     no_gpus = 5
+#     batch_size = 6
+ 
+#     output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+#     dataset = tf.data.Dataset.from_tensor_slices((segment_keys,[split]*len(segment_keys)))
+#     dataset = dataset.map(lambda seg_key, c_split: tuple(tf.py_func(get_data, [seg_key,c_split], output_types)), num_parallel_calls=8)
+#     dataset = dataset.batch(batch_size=batch_size*no_gpus)
+#     dataset = dataset.prefetch(buffer_size=50)
+ 
+#     iterator = dataset.make_one_shot_iterator()
+#     next_element = iterator.get_next()
+ 
+#     rgb_seq = tf.cast(next_element[0], tf.float32)
+#     rgb_seq.set_shape([batch_size*no_gpus,32,400,400,3])
+ 
+#     _, labels, rois, no_dets,_ = next_element
+ 
+#     rois_nonzero, labels_nonzero, batch_indices_nonzero = combine_batch_rois(rois, labels)
+ 
+#     boxes = temporal_roi_cropping(rgb_seq, rois_nonzero, batch_indices_nonzero, [50,50])
+ 
+ 
+ 
+#     init_op = tf.global_variables_initializer()
+ 
+#     sess = tf.Session()
+ 
+#     sess.run(init_op)
+ 
+#     # test dataset iterator:
+#     for _ in range(100):
+#         sample, labels_np, rois_np, no_dets_np, segment_key, np_boxes, rois_nonzero_np = sess.run(list(next_element)+[boxes, rois_nonzero])
+#         np_boxes = np.uint8(np_boxes)
+#         _visualize(0, np_boxes)
+#         import pdb;pdb.set_trace()
+ 
+# def _visualize(index, np_boxes):
+#     images = np_boxes[index,:]
+#     images = images[::5,:]
+#     img_to_show = np.reshape(images, [-1,50,3])
+#     # cv2.imshow('rois', img_to_show)
+#     cv2.imwrite('rois.jpg', img_to_show)
+#     # cv2.waitKey(0)
+#     # cv2.destroyAllWindows()
+
+
+# def get_tfrecord_np(serialized_example):
+    
+#     # Prepare feature list; read encoded JPG images as bytes
+#     features = dict()
+#     #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+#     features["frames"] = tf.VarLenFeature(tf.string)
+#     features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+#     #features["filename"] = tf.FixedLenFeature((), tf.string)
+#     features['movie'] = tf.FixedLenFeature((), tf.string)
+#     features['segment'] = tf.FixedLenFeature((), tf.string)
+
+    
+#     # Parse into tensors
+#     parsed_features = tf.parse_single_example(serialized_example, features)
+    
+#     # Randomly sample offset from the valid range.
+#     #random_offset = tf.random_uniform(
+#     #    shape=(), minval=0,
+#     #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+    
+#     #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+    
+#     # Decode the encoded JPG images
+#     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+#     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+#     sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+
+#     if INPUT_H != 400:
+#         sample = tf.image.resize_images(sample, [INPUT_H, INPUT_W])
+    
+#     #label  = tf.cast(parsed_features["class_label"], tf.int64)
+#     #label = parsed_features['filename']
+#     labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment']], [ tf.int32, tf.float32, tf.int64, tf.string])
+    
+    
+#     return sample, labels_np, rois_np, no_det, segment_key
+
+
+
+# def get_labels_wrapper(movie, segment): #, split):
+#     segment_key = "%s.%s" % (movie, segment)
+#     split = check_split(segment_key)
+
+#     labels_np, rois_np, no_det = get_labels(segment_key,split)
+#     return labels_np, rois_np, no_det, segment_key
+
+
+
+
+
+# def get_video_frames(segment_key, split):
+#     # Uses opencv, stupid opencv wont build with video support on the server
+#     # split = sample_info['split']
+#     # segment_key = sample_info['segment_key']
+#     movie_key, timestamp = segment_key.split('.')
+
+#     vid_path = os.path.join(SEGMENTS_FOLDER, split, 'clips', movie_key, '%s.mp4' % timestamp)
+
+#     vcap = cv2.VideoCapture(vid_path)
+
+#     vidfps = vcap.get(cv2.CAP_PROP_FPS)
+#     vid_W = vcap.get(cv2.CAP_PROP_FRAME_WIDTH)  # float
+#     vid_H = vcap.get(cv2.CAP_PROP_FRAME_HEIGHT) # float
+#     no_frames = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+#     f_timesteps, f_H, f_W, f_C = [INPUT_T, INPUT_H, INPUT_W, 3]
+
+#     slope = (no_frames-1) / float(f_timesteps - 1)
+#     indices = (slope * np.arange(f_timesteps)).astype(np.int64)
+
+#     sample = np.zeros([f_timesteps, f_H, f_W, f_C], np.uint8)
+
+#     timestep = 0
+#     for vid_idx in range(no_frames):
+#         if vid_idx not in indices:
+#             ret, frame = vcap.read()
+        
+#         else:
+#             ret, frame = vcap.read()
+#             # bgr2rgb
+#             frame = frame[:,:,::-1]
+#             # reshaped = cv2.resize(frame, (f_H, f_W))
+#             reshaped = cv2.resize(frame, (f_W, f_H))
+#             # repeat the frame if necessary
+#             for _ in range(indices.tolist().count(vid_idx)):
+#                 sample[timestep, :, :, :] = reshaped
+#                 timestep += 1
+
+#     vcap.release()
+#     return sample
+
+# def get_tfrecord_train(serialized_example):
+#     split = 'train'
+#     
+#     # Prepare feature list; read encoded JPG images as bytes
+#     features = dict()
+#     #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+#     features["frames"] = tf.VarLenFeature(tf.string)
+#     features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+#     #features["filename"] = tf.FixedLenFeature((), tf.string)
+#     features['movie'] = tf.FixedLenFeature((), tf.string)
+#     features['segment'] = tf.FixedLenFeature((), tf.string)
+# 
+#     
+#     # Parse into tensors
+#     parsed_features = tf.parse_single_example(serialized_example, features)
+#     
+#     # Randomly sample offset from the valid range.
+#     #random_offset = tf.random_uniform(
+#     #    shape=(), minval=0,
+#     #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+#     
+#     #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+#     
+#     # Decode the encoded JPG images
+#     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+#     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+#     sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+#     
+#     #label  = tf.cast(parsed_features["class_label"], tf.int64)
+#     #label = parsed_features['filename']
+#     labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+#     
+#     
+#     return sample, labels_np, rois_np, no_det, segment_key
+# 
+# def get_tfrecord_val(serialized_example):
+#     split = 'val'
+#     
+#     # Prepare feature list; read encoded JPG images as bytes
+#     features = dict()
+#     #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+#     features["frames"] = tf.VarLenFeature(tf.string)
+#     features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+#     #features["filename"] = tf.FixedLenFeature((), tf.string)
+#     features['movie'] = tf.FixedLenFeature((), tf.string)
+#     features['segment'] = tf.FixedLenFeature((), tf.string)
+# 
+#     
+#     # Parse into tensors
+#     parsed_features = tf.parse_single_example(serialized_example, features)
+#     
+#     # Randomly sample offset from the valid range.
+#     #random_offset = tf.random_uniform(
+#     #    shape=(), minval=0,
+#     #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+#     
+#     #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+#     
+#     # Decode the encoded JPG images
+#     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+#     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+#     sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+#     
+#     #label  = tf.cast(parsed_features["class_label"], tf.int64)
+#     #label = parsed_features['filename']
+#     labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+#     
+#     
+#     return sample, labels_np, rois_np, no_det, segment_key
+# 
+# def get_tfrecord_test(serialized_example):
+#     split = 'test'
+#     
+#     # Prepare feature list; read encoded JPG images as bytes
+#     features = dict()
+#     #features["class_label"] = tf.FixedLenFeature((), tf.int64)
+#     features["frames"] = tf.VarLenFeature(tf.string)
+#     features["num_frames"] = tf.FixedLenFeature((), tf.int64)
+#     #features["filename"] = tf.FixedLenFeature((), tf.string)
+#     features['movie'] = tf.FixedLenFeature((), tf.string)
+#     features['segment'] = tf.FixedLenFeature((), tf.string)
+# 
+#     
+#     # Parse into tensors
+#     parsed_features = tf.parse_single_example(serialized_example, features)
+#     
+#     # Randomly sample offset from the valid range.
+#     #random_offset = tf.random_uniform(
+#     #    shape=(), minval=0,
+#     #    maxval=parsed_features["num_frames"] - SEQ_NUM_FRAMES, dtype=tf.int64)
+#     
+#     #offsets = tf.range(random_offset, random_offset + SEQ_NUM_FRAMES)
+#     
+#     # Decode the encoded JPG images
+#     #images = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]),        offsets)
+#     sample = tf.map_fn(lambda i: tf.image.decode_jpeg(parsed_features["frames"].values[i]), tf.range(0, parsed_features['num_frames']), dtype=tf.uint8)
+#     sample = tf.cast(sample, tf.float32)[:,:,:,::-1]
+#     
+#     #label  = tf.cast(parsed_features["class_label"], tf.int64)
+#     #label = parsed_features['filename']
+#     labels_np, rois_np, no_det, segment_key = tf.py_func(get_labels_wrapper, [parsed_features['movie'], parsed_features['segment'], split], [ tf.int32, tf.float32, tf.int64, tf.string])
+#     
+#     
+#     return sample, labels_np, rois_np, no_det, segment_key

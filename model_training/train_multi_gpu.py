@@ -10,8 +10,9 @@ import logging
 from tqdm import tqdm
 
 # import dataset_tf
-import dataset_ava
-import dataset_jhmdb
+# import dataset_ava
+# import dataset_jhmdb
+from Datasets_AVA import Data_AVA
 import process_results
 import input_augmentation
 import model_layers
@@ -43,8 +44,8 @@ HOSTNAME = socket.gethostname()
 # if HOSTNAME == 'skywalker':
 #     PREPROCESS_CORES = 15
 #     BUFFER_SIZE = 20
-PREPROCESS_CORES = 10 # times number of gpus
-BUFFER_SIZE = 1
+# PREPROCESS_CORES = 10 # times number of gpus
+# BUFFER_SIZE = 1
 
 ACAM_FOLDER = os.environ['ACAM_DIR']
 # MAIN_FOLDER = os.environ['AVA_DIR']
@@ -59,7 +60,7 @@ MODALITY = 'RGB'
 # BOX_CROP_SIZE = [14, 14]
 # BOX_CROP_SIZE = [10, 10]
 # BOX_CROP_SIZE = [7, 7]
-USE_TFRECORD = True
+# USE_TFRECORD = True
 
 TRAIN_FULL_MODEL = True
 #TRAIN_FULL_MODEL = False
@@ -166,17 +167,17 @@ class Model_Trainer():
         np.random.seed(npy_seed)
 
         self.dataset_str = dataset_str
-        if dataset_str == "ava":
-            self.dataset_fcn = dataset_ava
-        elif dataset_str == 'jhmdb':
-            self.dataset_fcn = dataset_jhmdb
+        # if dataset_str == "ava":
+        #     self.data_obj = dataset_ava
+        # elif dataset_str == 'jhmdb':
+        #     self.data_obj = dataset_jhmdb
 
         self.base_learning_rate = base_learning_rate
         self.ckpt_file = ckpt_file
         self.evaluate = only_evaluate
         self.run_test = run_test
         self.model_id = model_id
-        self.saver_path = self.dataset_fcn.MODEL_SAVER_PATH + '_%s_%s' % (model_id, dataset_str)
+        
         self.batch_size = batch_size
         self.architecture_str = architecture_str
         
@@ -190,146 +191,19 @@ class Model_Trainer():
 
 
     def set_data_inputs(self):
-        train_detection_segments = self.dataset_fcn.get_train_list()
-        #train_detection_segments += self.dataset_fcn.get_train_list()
-        #train_detection_segments += self.dataset_fcn.get_train_list()
-        #train_detection_segments += self.dataset_fcn.get_train_list()
-        split = 'train'
+        if self.dataset_str == 'ava':
+            self.data_obj = Data_AVA()
+            
 
-        #               [sample, labels_np, rois_np, no_det, segment_key] 
-        output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
-        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
-
-        # shuffle the list outside tf so I know the order. 
-        #np.random.seed(5)
-        # np.random.seed(7)
-        np.random.shuffle(train_detection_segments)
-
-
-        if not USE_TFRECORD:
-            dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
-            dataset = dataset.repeat()# repeat infinitely
-            dataset = dataset.map(lambda seg_key, c_split: 
-                    tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
-        else:
-            tfrecord_list = dataset_ava.generate_tfrecord_list(train_detection_segments)
-            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=PREPROCESS_CORES)
-            #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
-            #dataset = dataset.shuffle(len(tfrecord_list)//3)
-            dataset = dataset.shuffle(len(tfrecord_list)//8)
-            dataset = dataset.repeat()# repeat infinitely
-            #dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
-            dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES)
-        # repeat infinitely and shuffle with seed
-        # dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1000, count=-1, seed=1))
-        # dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensors(x).repeat(2))
-        # dataset = dataset.shuffle(BATCH_SIZE * self.no_gpus * 4)
-        # import pdb;pdb.set_trace()
-        # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
-        #                                 cycle_length=10, block_length=1)
-        dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
-        #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 200)
-        #dataset = dataset.prefetch(buffer_size=BUFFER_SIZE * self.no_gpus)
-        dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
-        dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
-        self.training_dataset = dataset
-        self.train_detection_segments = train_detection_segments
         
-        if not self.run_test:
-            val_detection_segments = self.dataset_fcn.get_val_list()
-            split = 'val'
-                
-        else:
-            val_detection_segments = self.dataset_fcn.get_test_list()
-            split = 'test'
-        
-        ## DEBUGGING
-        # val_detection_segments = ['1j20qq1JyX4.1108']
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Ov0za6Xb1LM')]
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('_eBah6c5kyA')]
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('om_83F5VwTQ.11')]
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('2PpxiG0WU18.091')] # 3 people scene talking
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('1j20qq1JyX4.112')]
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('55Ihr6uVIDA.092')] # Carry
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('9F2voT6QWvQ.102')] # Dance
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Di1MG6auDYo.13')] # Answer Phone
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Di1MG6auDYo.107')] # Eat
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('uNT6HrrnqPU.172')] # Kiss
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('IzvOYVMltkI.163')] # Ride
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Di1MG6auDYo.142')] # Read
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('CMCPhm2L400.113')] # Run
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('er7eeiJB6dI.135')] # Bend
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('_eBah6c5kyA.118')] # Sleep
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('Hscyg0vLKc8.104')] # Fight
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('9Y_l9NsnYE0.133')] # Listen
-        # val_detection_segments = [seg for seg in val_detection_segments if seg.startswith('rXFlJbXyZyc.154')] # Talk
-        # val_detection_segments = CORRECT_DETECTIONS
-        # val_detection_segments = MISSED_DETECTIONS
-        ## DEBUGGING
-
-        #               [sample, labels_np, rois_np, no_det, segment_key] 
-        output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
-        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
-
-        # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
-        #if not self.evaluate:
-        #if True:
-        #    np.random.seed(10)
-        #    np.random.shuffle(val_detection_segments)
-
-        if not USE_TFRECORD:
-            dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
-            dataset = dataset.repeat()# repeat infinitely
-            dataset = dataset.map(lambda seg_key, c_split: 
-                    tuple(tf.py_func(self.dataset_fcn.get_data, [seg_key,c_split], output_types)),
-                    num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
-        else:
-            tfrecord_list = dataset_ava.generate_tfrecord_list(val_detection_segments)
-            #tfrecord_list = tf.data.Dataset.list_files("/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-*-of-00010")
-            #tfrecord_list = ["/media/ssd1/oytun/data/AVA/tfrecords_combined/val/val_dataset.record-00001-of-00010"]
-            dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=PREPROCESS_CORES)
-            dataset = dataset.repeat()# repeat infinitely
-            dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES)
-        # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
-        dataset = dataset.filter(self.dataset_fcn.filter_no_detections)
-        dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
-        dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
-        self.validation_dataset = dataset
-        self.val_detection_segments = val_detection_segments
-
-        # skip validation
-        # self.val_detection_segments = val_detection_segments[:200]
-        
-
-
-        #### configure the input selector
-        self.input_handle = tf.placeholder(tf.string, shape=[])
-        iterator = tf.data.Iterator.from_string_handle( self.input_handle, self.training_dataset.output_types, self.training_dataset.output_shapes)
-
-        next_element = iterator.get_next()
-
-        # Define shapes of the inputs coming from python functions
-        input_batch, labels, rois, no_dets, segment_keys = next_element
-
-        # input_batch = tf.cast(input_batch, tf.float32)
-
-        input_batch.set_shape([None, self.dataset_fcn.INPUT_T, self.dataset_fcn.INPUT_H, self.dataset_fcn.INPUT_W, 3])
-        #labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
-        labels.set_shape([None, self.dataset_fcn.MAX_ROIS_IN_TRAINING, self.dataset_fcn.NUM_CLASSES])
-        #rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
-        rois.set_shape([None, self.dataset_fcn.MAX_ROIS_IN_TRAINING, 4])
-        no_dets.set_shape([None])
-        segment_keys.set_shape([None])
-        
-
+        input_batch, labels, rois, no_dets, segment_keys = self.data_obj.setup_tfdatasets()
         self.input_batch = input_batch
         self.labels =labels
         self.rois = rois
         self.no_dets = no_dets
         self.segment_keys = segment_keys
-        
-        pass
+
+        self.saver_path = self.data_obj.MODEL_SAVER_PATH + '_%s_%s' % (self.model_id, self.dataset_str)
 
     def set_multi_gpu_trainer(self):
         input_batch = self.input_batch
@@ -337,10 +211,6 @@ class Model_Trainer():
         rois = self.rois
         no_dets = self.no_dets
         self.is_training = tf.placeholder(tf.bool, [], name='TrainFlag')
-
-        # TODO make i3d better
-        # model = i3d_model.I3D_model(modality=MODALITY, num_classes=NUM_CLASSES)
-        # self.model = model
 
         # Choose variables to train if we are not using the TRAIN_FULL_MODEL flag
         self.var_identifiers_for_training = [
@@ -535,37 +405,15 @@ class Model_Trainer():
         # self.regular_keyframe_rois = dataset_tf.temporal_roi_cropping(cur_input_seq, cur_rois, cur_b_idx, [100,100])[:,16,:]
         # self.shifted_keyframe_rois = dataset_tf.temporal_roi_cropping(cur_input_seq, shifted_rois, cur_b_idx, [100,100])[:,16,:]
 
-        
-
         # box_features = dataset_tf.temporal_roi_cropping(features, cur_rois, cur_b_idx, BOX_CROP_SIZE)
         # box_features = dataset_tf.temporal_roi_cropping(features, shifted_rois, cur_b_idx, BOX_CROP_SIZE)
 
         ## Args model selection
         logging.info('Using model architecture: %s' % self.architecture_str )
-        
-        #### INITIAL FEATURES
-        #_, end_points = i3d.inference(cur_input_seq, self.is_training, self.dataset_fcn.NUM_CLASSES, end_point=end_point)
-        #features = end_points[end_point]
-        ## import pdb;pdb.set_trace()
-        ##self.feature_temp_len = feature_temp_len = int(features.shape[1])
-        #class_feats = model_layers.choose_roi_architecture(self.architecture_str, features, shifted_rois, cur_b_idx, self.is_training)
-        
-
-
-        #logging.info('Using Dropout')
-        #class_feats_drop = tf.layers.dropout(inputs=class_feats, rate=0.4, training=self.is_training, name='CLS_DROP1')
-        #logits = tf.layers.dense(inputs=class_feats_drop, 
-        #                         units=self.dataset_fcn.NUM_CLASSES, 
-        #                         activation=None, 
-        #                         name='CLS_Logits', 
-        #                         kernel_initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.01))
-
-        # logits = tf.layers.dense(inputs=class_feats, units=NUM_CLASSES, activation=None, name='CLS_Logits')
-
         logits = model_layers.apply_model_inference(self.architecture_str, 
                             cur_input_seq, 
                             self.is_training, 
-                            self.dataset_fcn.NUM_CLASSES, 
+                            self.data_obj.NUM_CLASSES, 
                             shifted_rois,
                             cur_b_idx)
 
@@ -594,21 +442,6 @@ class Model_Trainer():
                 logging.info("Optimizing on Sigmoid X-Entropy loss! ")
                 sigmoid_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=fl_input_labels,
                                                                 logits=logits)
-                if dataset_ava.FOCUS_ON_CLASSES:
-                #if True:
-                    ### focusing on classes
-                    logging.info('Focusing on following classes')
-                    logging.info(dataset_ava.ACTIONS_TO_FOCUS)
-                    action_mask = [float(dataset_ava.TRAIN2ANN[str(ii)]['class_str'] in dataset_ava.ACTIONS_TO_FOCUS) for ii in range(dataset_ava.NUM_CLASSES)]
-                    #sigmoid_loss = sigmoid_loss * np.array(action_mask)
-                    neg_loss = sigmoid_loss * np.array(action_mask) * (1. - fl_input_labels)
-                    pos_loss = sigmoid_loss * np.array(action_mask) * (fl_input_labels) * 10
-                    #pred_probs = pred_probs * np.array(action_mask)
-                    sigmoid_loss += neg_loss + pos_loss
-                # neg_loss = sigmoid_loss * (1. - fl_input_labels)
-                # pos_loss = sigmoid_loss * (fl_input_labels) * 10
-                # #pred_probs = pred_probs * np.array(action_mask)
-                # sigmoid_loss = neg_loss + pos_loss
 
                 per_roi_loss = tf.reduce_mean(sigmoid_loss, axis=1)
                 #focus_on_classes = [dataset_ava.ANN2TRAIN[str(action)]['train_id'] for action in range(15,64) if str(action) in dataset_ava.ANN2TRAIN.keys()]#all object classes
@@ -825,17 +658,9 @@ class Model_Trainer():
         # sess = tf.Session()
         self.sess = sess
 
-        # You can use feedable iterators with a variety of different kinds of iterator
-        # (such as one-shot and initializable iterators).
-        self.training_iterator = self.training_dataset.make_one_shot_iterator()
-        self.validation_iterator = self.validation_dataset.make_initializable_iterator()
-
-        # The `Iterator.string_handle()` method returns a tensor that can be evaluated
-        # and used to feed the `handle` placeholder.
-        self.training_handle = sess.run(self.training_iterator.string_handle())
-        self.validation_handle = sess.run(self.validation_iterator.string_handle())
-
         sess.run(init_op)
+
+        self.data_obj.initialize_data_iterators(sess)
 
         i3d_ckpt = ACAM_FOLDER + '/model_training/weights/i3d_rgb_imagenet/model.ckpt'
         # Initialize weights
@@ -954,7 +779,7 @@ class Model_Trainer():
                 g_step = self.sess.run(self.global_step)
                 res_name = 'VALIDATION' + '_Results_'+ self.model_id +'_%.2i' % g_step
                 # process_ava_style_results(res_name)
-                self.dataset_fcn.process_evaluation_results(res_name)
+                self.data_obj.process_evaluation_results(res_name)
             if self.evaluate:
                 break
 
@@ -997,15 +822,16 @@ class Model_Trainer():
             run_dict['input_batch'] = self.input_batch
             run_dict['rois'] = self.rois
 
+        self.data_obj.select_iterator(feed_dict, training_flag)
         if training_flag: 
             run_dict['optimization_op'] = self.optimization_op
-            feed_dict[self.input_handle] = self.training_handle
-            logging.info('Training data')
+            # feed_dict[self.input_handle] = self.training_handle
+            logging.info('Training')
         else:
             # init validation so we get same val data each time
-            self.sess.run(self.validation_iterator.initializer)
-            feed_dict[self.input_handle] = self.validation_handle
-            logging.info('Validation data')
+            # self.sess.run(self.validation_iterator.initializer)
+            # feed_dict[self.input_handle] = self.validation_handle
+            logging.info('Validation')
 
 
         # Initialize
@@ -1023,8 +849,8 @@ class Model_Trainer():
         all_results = [] # each term is a list itself, first term is the vid path
 
         # Every epoch go through every sample
-        train_iters = len(self.train_detection_segments) // (self.batch_size * self.no_gpus) + 1
-        val_iters = len(self.val_detection_segments) // (self.batch_size * self.no_gpus) + 1
+        train_iters = len(self.data_obj.train_detection_segments) // (self.batch_size * self.no_gpus) + 1
+        val_iters = len(self.data_obj.val_detection_segments) // (self.batch_size * self.no_gpus) + 1
 
         ## validate on everything
         # val_iters = len(self.val_detection_segments) // (BATCH_SIZE * self.no_gpus)
@@ -1091,30 +917,30 @@ class Model_Trainer():
             #cv2.waitKey(0)
             #import pdb;pdb.set_trace()
 
-            if GENERATE_ATTN_MAPS:
-                roi_probs = out_dict['pred_probs']
-                for nnn in range(out_dict['no_dets'][0]):
-                    print('\n')
-                    print( ', '.join(out_dict['segment_keys']))
-                    print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
-                           get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
-                    print("Labels: " + ",".join([dataset_ava.TRAIN2ANN[str(ccc)]['class_str'] for ccc in range(60) if out_dict['roi_labels'][nnn][ccc]==1]))
-                    #img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
-                    #img = generate_attention_visualization(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
-                    #img = generate_attention_visualization(out_dict['attention_map'], out_dict['final_i3d_feats'], out_dict['input_batch'], out_dict['rois'], nnn)
-                    #img = generate_class_activation_maps(out_dict['final_i3d_feats'], out_dict['cls_weights'], out_dict['input_batch'], out_dict['rois'], out_dict['pred_probs'], nnn)
-                    img = generate_class_activation_maps(out_dict['final_i3d_feats'], out_dict['cls_weights'], out_dict['input_batch'], out_dict['rois'],
-                                                         out_dict['pred_probs'], nnn, out_dict['roi_labels'])
+            # if GENERATE_ATTN_MAPS:
+            #     roi_probs = out_dict['pred_probs']
+            #     for nnn in range(out_dict['no_dets'][0]):
+            #         print('\n')
+            #         print( ', '.join(out_dict['segment_keys']))
+            #         print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
+            #                get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
+            #         print("Labels: " + ",".join([dataset_ava.TRAIN2ANN[str(ccc)]['class_str'] for ccc in range(60) if out_dict['roi_labels'][nnn][ccc]==1]))
+            #         #img = generate_topk_variance_attention_maps(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
+            #         #img = generate_attention_visualization(out_dict['attention_map'], out_dict['feature_activations'], out_dict['input_batch'], out_dict['rois'], nnn)
+            #         #img = generate_attention_visualization(out_dict['attention_map'], out_dict['final_i3d_feats'], out_dict['input_batch'], out_dict['rois'], nnn)
+            #         #img = generate_class_activation_maps(out_dict['final_i3d_feats'], out_dict['cls_weights'], out_dict['input_batch'], out_dict['rois'], out_dict['pred_probs'], nnn)
+            #         img = generate_class_activation_maps(out_dict['final_i3d_feats'], out_dict['cls_weights'], out_dict['input_batch'], out_dict['rois'],
+            #                                              out_dict['pred_probs'], nnn, out_dict['roi_labels'])
 
-                    cv2.imshow('Maps', img)
-                    k = cv2.waitKey(0)
-                    cv2.destroyWindow('Maps')
-                    if k == ord("n"):
-                        break
-                    elif k == ord("q"):
-                        os._exit(0)
+            #         cv2.imshow('Maps', img)
+            #         k = cv2.waitKey(0)
+            #         cv2.destroyWindow('Maps')
+            #         if k == ord("n"):
+            #             break
+            #         elif k == ord("q"):
+            #             os._exit(0)
 
-                    # import pdb;pdb.set_trace()
+            #         # import pdb;pdb.set_trace()
 
 
             # Trace the timeline for debugging performance
@@ -1264,9 +1090,9 @@ class Model_Trainer():
         # do it for training also
         if not self.run_test:
             if self.dataset_str == 'ava':
-                class_AP_str = process_results.get_AP_str(all_results)
+                class_AP_str = self.data_obj.get_AP_str(all_results)
             elif self.dataset_str == 'jhmdb':
-                class_AP_str = self.dataset_fcn.get_AP_str(all_results)
+                class_AP_str = self.data_obj.get_AP_str(all_results)
             else:
                 raise NotImplementedError
             logging.info('\n'+ split_name + '\n')
@@ -1286,7 +1112,7 @@ class Model_Trainer():
             # logging.info(report)
 
             g_step = self.sess.run(self.global_step)
-            save_path = self.dataset_fcn.RESULT_SAVE_PATH + split_name + '_Results_'+ self.model_id +'_%.2i.txt' % g_step
+            save_path = self.data_obj.RESULT_SAVE_PATH + split_name + '_Results_'+ self.model_id +'_%.2i.txt' % g_step
             save_serialized_list(all_results, save_path)
             logging.info('Saved results to: ' + save_path)
 
@@ -1491,68 +1317,68 @@ def generate_attention_visualization(attention_map, feature_activations, input_b
     #cv2.destroyWindow('Maps')
     return img_to_show
 
-def generate_class_activation_maps(feature_activations, cls_weights, input_batch, rois, pred_probs, roi_index, roi_labels):
-    time_index = 4
-    # feat_time_index = feature_activations.shape[1]//2
-    feat_time_index = 0
-    mask = np.float32(feature_activations != 0.)
+# def generate_class_activation_maps(feature_activations, cls_weights, input_batch, rois, pred_probs, roi_index, roi_labels):
+#     time_index = 4
+#     # feat_time_index = feature_activations.shape[1]//2
+#     feat_time_index = 0
+#     mask = np.float32(feature_activations != 0.)
 
-    class_maps = np.matmul(feature_activations, cls_weights)
+#     class_maps = np.matmul(feature_activations, cls_weights)
 
-    top, left, bottom, right = rois[0, roi_index]
-    input_frame = np.uint8(input_batch[0, 16])[:,:,::-1]
-    img_to_show = input_frame.copy()
-    H,W,C = img_to_show.shape
-    left = int(W * left)
-    right = int(W * right)
-    top = int(H * top)
-    bottom = int(H * bottom)
-    cv2.rectangle(img_to_show, (left,top), (right,bottom), (0,255,0), 4)
+#     top, left, bottom, right = rois[0, roi_index]
+#     input_frame = np.uint8(input_batch[0, 16])[:,:,::-1]
+#     img_to_show = input_frame.copy()
+#     H,W,C = img_to_show.shape
+#     left = int(W * left)
+#     right = int(W * right)
+#     top = int(H * top)
+#     bottom = int(H * bottom)
+#     cv2.rectangle(img_to_show, (left,top), (right,bottom), (0,255,0), 4)
 
-    # add the average_map
-    #avg_map = average_map[roi_index, time_index]
-    #if roi_index == 0:
-    #    avg_map = average_map[0,4,:] - average_map[1,4,:]
-    #elif roi_index == 1:
-    #    avg_map = average_map[1,4,:] - average_map[0,4,:]
-    #else:
-    #    avg_map = average_map[roi_index, 4, :]
-    #print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
-    #       get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
+#     # add the average_map
+#     #avg_map = average_map[roi_index, time_index]
+#     #if roi_index == 0:
+#     #    avg_map = average_map[0,4,:] - average_map[1,4,:]
+#     #elif roi_index == 1:
+#     #    avg_map = average_map[1,4,:] - average_map[0,4,:]
+#     #else:
+#     #    avg_map = average_map[roi_index, 4, :]
+#     #print([(dataset_ava.TRAIN2ANN[str(ccc)]['class_str'], get_3_decimal_float(roi_probs[nnn][ccc])) for ccc in range(60) if
+#     #       get_3_decimal_float(roi_probs[nnn][ccc]) > 0.1])
 
-    # visualize highest cams
-    # action_classes = [cc for cc in range(dataset_ava.NUM_CLASSES) if pred_probs[roi_index, cc] > 0.1]
+#     # visualize highest cams
+#     # action_classes = [cc for cc in range(dataset_ava.NUM_CLASSES) if pred_probs[roi_index, cc] > 0.1]
 
-    # visualize specific cams
-    #class_list = ["sit", "stand", 'touch', 'listen to', 'talk']
-    #class_list = ["stand", "walk", "carry", "watch (a"]
-    #class_list = ["talk", "listen to"]
-    #class_list = ['talk']
-    #action_classes = [cc for cc in range(dataset_ava.NUM_CLASSES) if any([cname in dataset_ava.TRAIN2ANN[str(cc)]['class_str'] for cname in class_list])]
-    action_classes = np.where(roi_labels[roi_index])[0].tolist()
-    for ii in action_classes:
-        #avg_map = class_maps[roi_index, feat_time_index, :, :, ii]
-        act_map = class_maps[roi_index, :, :, :, ii]
-        avg_map = np.max(act_map, axis=0)
-        rsz_avg_map = cv2.resize(avg_map, (400,400))#, interpolation=0)
-        min_val = np.min(class_maps[:,:, :, :, :])
-        max_val = np.max(class_maps[:,:, :, :, :] - min_val)
-        normalized_image = np.uint8((rsz_avg_map-min_val) / max_val * 255.)
-        colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
-        overlay = input_frame.copy()
-        overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
-        img_to_show = np.concatenate([img_to_show, overlay], axis=1)
-        print((dataset_ava.TRAIN2ANN[str(ii)]['class_str'], get_3_decimal_float(pred_probs[roi_index][ii])))
+#     # visualize specific cams
+#     #class_list = ["sit", "stand", 'touch', 'listen to', 'talk']
+#     #class_list = ["stand", "walk", "carry", "watch (a"]
+#     #class_list = ["talk", "listen to"]
+#     #class_list = ['talk']
+#     #action_classes = [cc for cc in range(dataset_ava.NUM_CLASSES) if any([cname in dataset_ava.TRAIN2ANN[str(cc)]['class_str'] for cname in class_list])]
+#     action_classes = np.where(roi_labels[roi_index])[0].tolist()
+#     for ii in action_classes:
+#         #avg_map = class_maps[roi_index, feat_time_index, :, :, ii]
+#         act_map = class_maps[roi_index, :, :, :, ii]
+#         avg_map = np.max(act_map, axis=0)
+#         rsz_avg_map = cv2.resize(avg_map, (400,400))#, interpolation=0)
+#         min_val = np.min(class_maps[:,:, :, :, :])
+#         max_val = np.max(class_maps[:,:, :, :, :] - min_val)
+#         normalized_image = np.uint8((rsz_avg_map-min_val) / max_val * 255.)
+#         colored_map = cv2.applyColorMap(normalized_image, cv2.COLORMAP_JET)
+#         overlay = input_frame.copy()
+#         overlay = cv2.addWeighted(overlay, 0.5, colored_map, 0.5, 0)
+#         img_to_show = np.concatenate([img_to_show, overlay], axis=1)
+#         print((dataset_ava.TRAIN2ANN[str(ii)]['class_str'], get_3_decimal_float(pred_probs[roi_index][ii])))
 
 
-    # write the classes on image
-    img_to_show = np.concatenate([img_to_show, np.zeros([50, 400*len(action_classes)+400, 3], np.uint8)])
-    for cc in range(len(action_classes)):
-        cls_no = action_classes[cc]
-        left = 400 + 400*cc + 30
-        top = 425
-        message = dataset_ava.TRAIN2ANN[str(cls_no)]['class_str'][:26]
-        cv2.putText(img_to_show, message, (left, top), 0, 1, (255,255,255), 1)
+#     # write the classes on image
+#     img_to_show = np.concatenate([img_to_show, np.zeros([50, 400*len(action_classes)+400, 3], np.uint8)])
+#     for cc in range(len(action_classes)):
+#         cls_no = action_classes[cc]
+#         left = 400 + 400*cc + 30
+#         top = 425
+#         message = dataset_ava.TRAIN2ANN[str(cls_no)]['class_str'][:26]
+#         cv2.putText(img_to_show, message, (left, top), 0, 1, (255,255,255), 1)
 
 
     # for ii in range(k):
@@ -1571,111 +1397,6 @@ def generate_class_activation_maps(feature_activations, cls_weights, input_batch
     # import pdb;pdb.set_trace()
     #cv2.destroyWindow('Maps')
     return img_to_show
-
-
-
-CORRECT_DETECTIONS     = [u'covMYDBa5dk.1360', u'Ekwy7wzLfjc.1191', u'b-YoBU0XT90.1281', u'er7eeiJB6dI.1350', u'KHHgQ_Pe4cI.1548', u'_eBah6c5kyA.1589',
-                          u'CZ2NP8UsPuE.1673', u'CZ2NP8UsPuE.1674', u'b-YoBU0XT90.1500', u'CZ2NP8UsPuE.1672', u'9F2voT6QWvQ.1025', u'9F2voT6QWvQ.1026',
-                          u'9F2voT6QWvQ.1064', u'9F2voT6QWvQ.1063', u'9F2voT6QWvQ.1078', u'OGNnUvJq9RI.1389', u'Hscyg0vLKc8.1696', u'Hscyg0vLKc8.1590',
-                          u'OGNnUvJq9RI.1111', u'OGNnUvJq9RI.1125', u'u1ltv6r14KQ.1620', u'lDmLcWWBp1E.1066', u'UrsCy6qIGoo.1652', u'55Ihr6uVIDA.1600',
-                          u'z-fsLpGHq6o.1730', u'Hscyg0vLKc8.1375', u'CMCPhm2L400.1148', u'er7eeiJB6dI.0921', u'er7eeiJB6dI.0920', u'CMCPhm2L400.1141',
-                          u'_eBah6c5kyA.1181', u'_eBah6c5kyA.1183', u'BXCh3r-pPAM.1755', u'fpprSy6AzKk.1194', u'b-YoBU0XT90.1131', u'Hscyg0vLKc8.1523',
-                          u'Hscyg0vLKc8.1186', u'Hscyg0vLKc8.1662', u'Hscyg0vLKc8.1660', u'Hscyg0vLKc8.1169', u'sNQJfYvhcPk.1348', u'sNQJfYvhcPk.1349',
-                          u'CMCPhm2L400.1177', u'CMCPhm2L400.1180', u'CMCPhm2L400.1176', u'6d5u6FHvz7Q.1434', u'Di1MG6auDYo.1119', u'6d5u6FHvz7Q.1418',
-                          u'6d5u6FHvz7Q.1436', u'6d5u6FHvz7Q.1413', u'9Y_l9NsnYE0.1156', u'Lg1jOu8cUBM.1172', u'55Ihr6uVIDA.0970', u'Lg1jOu8cUBM.1171',
-                          u'55Ihr6uVIDA.0968', u'xeGWXqSvC-8.1030', u'wONG7Vh87B4.1158', u'xeGWXqSvC-8.1062', u'Ekwy7wzLfjc.1670', u'xeGWXqSvC-8.1061',
-                          u'ZosVdkY76FU.1162', u'uNT6HrrnqPU.1683', u'om_83F5VwTQ.1468', u'55Ihr6uVIDA.1327', u'uNT6HrrnqPU.1682', u'O_NYCUhZ9zw.1479',
-                          u'Di1MG6auDYo.1304', u'Di1MG6auDYo.1299', u'WSPvfxtqisg.0948', u'O_NYCUhZ9zw.1566', u'7T5G0CmwTPo.1739', u'7T5G0CmwTPo.1740',
-                          u'j5jmjhGBW44.1612', u'QCLQYnt3aMo.1617', u'b-YoBU0XT90.1621', u'covMYDBa5dk.1789', u'b-YoBU0XT90.1311', u'covMYDBa5dk.1784',
-                          u'b-YoBU0XT90.1312', u'jE0S8gYWftE.1417', u'l2XO3tQk8lI.1333', u'u1ltv6r14KQ.1417', u'l2XO3tQk8lI.1332', u'o4xQ-BEa3Ss.1602',
-                          u'qx2vAO5ofmo.1307', u'6d5u6FHvz7Q.1175', u'7T5G0CmwTPo.1445', u'6d5u6FHvz7Q.1176', u'6d5u6FHvz7Q.1174', u'6d5u6FHvz7Q.1181',
-                          u'oifTDWZvOhY.1094', u'KHHgQ_Pe4cI.1334', u'oifTDWZvOhY.1095', u'KHHgQ_Pe4cI.1333', u'9F2voT6QWvQ.1164', u'xeGWXqSvC-8.1576',
-                          u'xeGWXqSvC-8.1726', u'xeGWXqSvC-8.1724', u'xeGWXqSvC-8.1725', u'xeGWXqSvC-8.1575', u'QTmwhrVal1g.1626', u'Ov0za6Xb1LM.0943',
-                          u'QTmwhrVal1g.1450', u'QTmwhrVal1g.1608', u'QTmwhrVal1g.1627', u'bePts02nIY8.1020', u'bePts02nIY8.1022', u'bePts02nIY8.1021',
-                          u'bePts02nIY8.1023', u'bePts02nIY8.1024', u'TEQ9sAj-DPo.1604', u'xeGWXqSvC-8.1783', u'sNQJfYvhcPk.1580', u'WSPvfxtqisg.0935',
-                          u'sNQJfYvhcPk.1579', u'_7oWZq_s_Sk.1714', u'_7oWZq_s_Sk.1721', u'9F2voT6QWvQ.1317', u'_7oWZq_s_Sk.1716', u'oifTDWZvOhY.1646',
-                          u'lDmLcWWBp1E.1314', u'b-YoBU0XT90.1358', u'fpprSy6AzKk.1128', u'OGNnUvJq9RI.1602', u'lDmLcWWBp1E.1328', u'9F2voT6QWvQ.1026',
-                          u'9F2voT6QWvQ.0932', u'9F2voT6QWvQ.1058', u'9F2voT6QWvQ.0998', u'9F2voT6QWvQ.0902', u'WSPvfxtqisg.0936', u'qx2vAO5ofmo.0985',
-                          u'u1ltv6r14KQ.1358', u'UOyyTUX5Vo4.1076', u'u1ltv6r14KQ.1547', u'fpprSy6AzKk.1215', u'fpprSy6AzKk.1102', u'fpprSy6AzKk.1216',
-                          u'fpprSy6AzKk.1101', u'fpprSy6AzKk.1202', u'O_NYCUhZ9zw.1112', u'qx2vAO5ofmo.1039', u'fpprSy6AzKk.1649', u'qx2vAO5ofmo.1406',
-                          u'9Y_l9NsnYE0.1798', u'u1ltv6r14KQ.1046', u'b-YoBU0XT90.1681', u'hHgg9WI8dTk.1796', u'KVq6If6ozMY.0994', u'_7oWZq_s_Sk.1642',
-                          u'55Ihr6uVIDA.1502', u'Ov0za6Xb1LM.1759', u'6d5u6FHvz7Q.1018', u'6d5u6FHvz7Q.0991', u'Ov0za6Xb1LM.1700', u'QCLQYnt3aMo.1503',
-                          u'QCLQYnt3aMo.1453', u'IzvOYVMltkI.1251', u'lDmLcWWBp1E.1322', u'QCLQYnt3aMo.1449', u'oifTDWZvOhY.0949', u'oifTDWZvOhY.0942',
-                          u'O_NYCUhZ9zw.1421', u'Ekwy7wzLfjc.1490', u'KHHgQ_Pe4cI.1281', u'CZ2NP8UsPuE.1123', u'UrsCy6qIGoo.1131', u'UrsCy6qIGoo.1128',
-                          u'oifTDWZvOhY.1319', u'UrsCy6qIGoo.1129', u'xeGWXqSvC-8.1045', u'xeGWXqSvC-8.1054', u'xeGWXqSvC-8.1016', u'xeGWXqSvC-8.1044',
-                          u'xeGWXqSvC-8.0985', u'CMCPhm2L400.1115', u'Ov0za6Xb1LM.1486', u'Ov0za6Xb1LM.1517', u'Ov0za6Xb1LM.1497', u'Ov0za6Xb1LM.1510',
-                          u'CZ2NP8UsPuE.1520', u'CZ2NP8UsPuE.1547', u'om_83F5VwTQ.1606', u'XpGRS72ghag.0971', u'IzvOYVMltkI.1462', u'ayAMdYfJJLk.0976',
-                          u'UrsCy6qIGoo.0909', u'UrsCy6qIGoo.0908', u'5BDj0ow5hnA.1009', u'5BDj0ow5hnA.1699', u'Di1MG6auDYo.1600', u'bePts02nIY8.1656',
-                          u'er7eeiJB6dI.0929', u'SCh-ZImnyyk.1772', u'KVq6If6ozMY.1770', u'wONG7Vh87B4.1388', u'_eBah6c5kyA.1129', u'wONG7Vh87B4.1384',
-                          u'BXCh3r-pPAM.1782', u'yn9WN9lsHRE.1493', u'ZosVdkY76FU.1604', u'ZosVdkY76FU.1602', u'ZosVdkY76FU.1605', u'ZosVdkY76FU.1603',
-                          u'ZosVdkY76FU.1606', u'nlinqZPgvVk.1740', u'KHHgQ_Pe4cI.1247', u'QTmwhrVal1g.1360', u'QTmwhrVal1g.1201', u'CMCPhm2L400.1387',
-                          u'9Y_l9NsnYE0.1580', u'9Y_l9NsnYE0.1579', u'9Y_l9NsnYE0.1588', u'9Y_l9NsnYE0.1586', u'9Y_l9NsnYE0.1578', u'WSPvfxtqisg.1207',
-                          u'Di1MG6auDYo.1435', u'WSPvfxtqisg.1206', u'Di1MG6auDYo.1434', u'Di1MG6auDYo.1436', u'KHHgQ_Pe4cI.1794', u'KHHgQ_Pe4cI.1793',
-                          u'KHHgQ_Pe4cI.1796', u'KHHgQ_Pe4cI.1795', u'O_NYCUhZ9zw.1426', u'Hscyg0vLKc8.1523', u'Hscyg0vLKc8.1046', u'Hscyg0vLKc8.1668',
-                          u'Hscyg0vLKc8.1041', u'Hscyg0vLKc8.1022', u'O_NYCUhZ9zw.1117', u'yn9WN9lsHRE.1353', u'O_NYCUhZ9zw.1118', u'IzvOYVMltkI.1258',
-                          u'om_83F5VwTQ.1223', u'z-fsLpGHq6o.1229', u'NO2esmws190.1764', u'z-fsLpGHq6o.1227', u'nlinqZPgvVk.1111', u'_dBTTYDRdRQ.1559',
-                          u'fpprSy6AzKk.1082', u'ZosVdkY76FU.1789', u'ZosVdkY76FU.1788', u'Hscyg0vLKc8.0935', u'fpprSy6AzKk.1081', u'zC5Fh2tTS1U.1584',
-                          u'XpGRS72ghag.1577', u'7T5G0CmwTPo.1496', u'tghXjom3120.1247', u'tghXjom3120.1245', u'lDmLcWWBp1E.1712', u'_7oWZq_s_Sk.0923',
-                          u'Gvp-cj3bmIY.1678', u'lDmLcWWBp1E.1711', u'UOyyTUX5Vo4.1585', u'Ov0za6Xb1LM.1208', u'Ov0za6Xb1LM.1207', u'uNT6HrrnqPU.1785',
-                          u'2PpxiG0WU18.1570', u'uNT6HrrnqPU.1788', u'uNT6HrrnqPU.1729', u'uNT6HrrnqPU.1728', u'uNT6HrrnqPU.1726', u'uNT6HrrnqPU.1730',
-                          u'uNT6HrrnqPU.1785', u'tghXjom3120.1690', u'covMYDBa5dk.1480', u'5BDj0ow5hnA.1043', u'covMYDBa5dk.1479', u'tghXjom3120.1692',
-                          u'9Y_l9NsnYE0.1337', u'9Y_l9NsnYE0.1289', u'Lg1jOu8cUBM.1229', u'IzvOYVMltkI.1549', u'9Y_l9NsnYE0.1290', u'lDmLcWWBp1E.1214',
-                          u'z-fsLpGHq6o.1732', u'z-fsLpGHq6o.1676', u'z-fsLpGHq6o.1224', u'l2XO3tQk8lI.1441', u'9F2voT6QWvQ.1054', u'9F2voT6QWvQ.1057',
-                          u'9F2voT6QWvQ.1053', u'fpprSy6AzKk.1102', u'9F2voT6QWvQ.1058', u'O_NYCUhZ9zw.1118', u'jE0S8gYWftE.1362', u'Di1MG6auDYo.1418',
-                          u'7T5G0CmwTPo.1678', u'O_NYCUhZ9zw.1612', u'z-fsLpGHq6o.1759', u'sNQJfYvhcPk.1247', u'z-fsLpGHq6o.1760', u'rXFlJbXyZyc.1549',
-                          u'SCh-ZImnyyk.1058', u'Hscyg0vLKc8.1453', u'Hscyg0vLKc8.1454', u'ayAMdYfJJLk.1526', u'ayAMdYfJJLk.1525', u'ayAMdYfJJLk.1527']
-
-MISSED_DETECTIONS = [u'QTmwhrVal1g.1154', u'Ekwy7wzLfjc.0983', u'NO2esmws190.1710', u'z-fsLpGHq6o.1586', u'lDmLcWWBp1E.1656', u'QTmwhrVal1g.1169',
-                     u'UOyyTUX5Vo4.1403', u'jE0S8gYWftE.1779', u'UrsCy6qIGoo.1088', u'Hscyg0vLKc8.1714', u'qx2vAO5ofmo.1117', u'tghXjom3120.1179',
-                     u'z-fsLpGHq6o.1212', u'tghXjom3120.1139', u'z-fsLpGHq6o.1146', u'KHHgQ_Pe4cI.1728', u'OGNnUvJq9RI.1190', u'Hscyg0vLKc8.0932',
-                     u'WSPvfxtqisg.1710', u'BXCh3r-pPAM.1752', u'ZosVdkY76FU.1198', u'CMCPhm2L400.1238', u'QCLQYnt3aMo.1065', u'CMCPhm2L400.0988',
-                     u'55Ihr6uVIDA.1145', u'z-fsLpGHq6o.1246', u'oifTDWZvOhY.1677', u'tghXjom3120.1635', u'CZ2NP8UsPuE.1190', u'tghXjom3120.1173',
-                     u'nlinqZPgvVk.1295', u'NO2esmws190.1534', u'55Ihr6uVIDA.1403', u'Ekwy7wzLfjc.1086', u'NO2esmws190.1584', u'Hscyg0vLKc8.1504',
-                     u'Hscyg0vLKc8.1784', u'Hscyg0vLKc8.1674', u'Hscyg0vLKc8.1618', u'Hscyg0vLKc8.1551', u'Ov0za6Xb1LM.1751', u'Hscyg0vLKc8.1225',
-                     u'u1ltv6r14KQ.1107', u'lDmLcWWBp1E.1172', u'Ov0za6Xb1LM.1746', u'UrsCy6qIGoo.1529', u'_eBah6c5kyA.0987', u'jE0S8gYWftE.1251',
-                     u'QTmwhrVal1g.1621', u'9Y_l9NsnYE0.1124', u'UrsCy6qIGoo.0913', u'QCLQYnt3aMo.1378', u'QCLQYnt3aMo.1384', u'Hscyg0vLKc8.1469',
-                     u'er7eeiJB6dI.1059', u'Hscyg0vLKc8.1390', u'Ekwy7wzLfjc.1674', u'Ekwy7wzLfjc.1652', u'Hscyg0vLKc8.1388', u'Ekwy7wzLfjc.1661',
-                     u'o4xQ-BEa3Ss.1441', u'yn9WN9lsHRE.1203', u'OGNnUvJq9RI.1228', u'TEQ9sAj-DPo.1493', u'TEQ9sAj-DPo.1548', u'SCh-ZImnyyk.1462',
-                     u'ZosVdkY76FU.0969', u'QTmwhrVal1g.1496', u'IzvOYVMltkI.1764', u'ayAMdYfJJLk.1173', u'QCLQYnt3aMo.1384', u'BXCh3r-pPAM.1671',
-                     u'ZosVdkY76FU.1676', u'ZosVdkY76FU.1607', u'QCLQYnt3aMo.1614', u'5BDj0ow5hnA.0965', u'wONG7Vh87B4.0929', u'uNT6HrrnqPU.1298',
-                     u'l2XO3tQk8lI.1101', u'KHHgQ_Pe4cI.0903', u'QTmwhrVal1g.1711', u'XpGRS72ghag.1412', u'CMCPhm2L400.1465', u'CMCPhm2L400.1123',
-                     u'CMCPhm2L400.1122', u'fpprSy6AzKk.1118', u'er7eeiJB6dI.1336', u'UOyyTUX5Vo4.0944', u'er7eeiJB6dI.1339', u'UOyyTUX5Vo4.0951',
-                     u'IzvOYVMltkI.1446', u'qx2vAO5ofmo.1343', u'yn9WN9lsHRE.1127', u'o4xQ-BEa3Ss.1530', u'jE0S8gYWftE.0961', u'BXCh3r-pPAM.1684',
-                     u'WSPvfxtqisg.1391', u'BXCh3r-pPAM.1240', u'uNT6HrrnqPU.1534', u'ayAMdYfJJLk.1322', u'2PpxiG0WU18.1153', u'jE0S8gYWftE.1251',
-                     u'Gvp-cj3bmIY.1032', u'XpGRS72ghag.1170', u'G4qq1MRXCiY.1756', u'Gvp-cj3bmIY.1503', u'Gvp-cj3bmIY.1568', u'ayAMdYfJJLk.1212',
-                     u'o4xQ-BEa3Ss.1162', u'z-fsLpGHq6o.0947', u'IzvOYVMltkI.1022', u'l2XO3tQk8lI.1214', u'fpprSy6AzKk.1634', u'NO2esmws190.0965',
-                     u'QCLQYnt3aMo.0951', u'fpprSy6AzKk.1475', u'oifTDWZvOhY.1590', u'xeGWXqSvC-8.1341', u'wONG7Vh87B4.1651', u'_7oWZq_s_Sk.1798',
-                     u'NO2esmws190.1607', u'o4xQ-BEa3Ss.1194', u'55Ihr6uVIDA.1151', u'WSPvfxtqisg.1790', u'55Ihr6uVIDA.1148', u'_dBTTYDRdRQ.1171',
-                     u'_7oWZq_s_Sk.1078', u'_dBTTYDRdRQ.1352', u'_dBTTYDRdRQ.1170', u'_dBTTYDRdRQ.1342', u'lDmLcWWBp1E.1471', u'z-fsLpGHq6o.1719',
-                     u'z-fsLpGHq6o.1720', u'O_NYCUhZ9zw.0925', u'55Ihr6uVIDA.1525', u'fpprSy6AzKk.0902', u'_dBTTYDRdRQ.1051', u'_7oWZq_s_Sk.1069',
-                     u'lDmLcWWBp1E.1126', u'rXFlJbXyZyc.1395', u'2PpxiG0WU18.1483', u'qx2vAO5ofmo.1577', u'QTmwhrVal1g.1721', u'Di1MG6auDYo.1658',
-                     u'CZ2NP8UsPuE.1649', u'KVq6If6ozMY.1756', u'Gvp-cj3bmIY.1276', u'UOyyTUX5Vo4.1314', u'9Y_l9NsnYE0.1738', u'5BDj0ow5hnA.1623',
-                     u'Ov0za6Xb1LM.1754', u'IzvOYVMltkI.1449', u'5BDj0ow5hnA.1394', u'oifTDWZvOhY.1792', u'ZosVdkY76FU.1190', u'qx2vAO5ofmo.1199',
-                     u'Di1MG6auDYo.1072', u'KHHgQ_Pe4cI.1699', u'G4qq1MRXCiY.1602', u'wONG7Vh87B4.1009', u'wONG7Vh87B4.1483', u'rXFlJbXyZyc.1469',
-                     u'jE0S8gYWftE.1606', u'ayAMdYfJJLk.1360', u'QCLQYnt3aMo.1283', u'er7eeiJB6dI.0995', u'Gvp-cj3bmIY.0999', u'CZ2NP8UsPuE.1184',
-                     u'er7eeiJB6dI.0974', u'CZ2NP8UsPuE.1187', u'rXFlJbXyZyc.1154', u'xeGWXqSvC-8.1133', u'rXFlJbXyZyc.1365', u'xeGWXqSvC-8.0942',
-                     u'xeGWXqSvC-8.0903', u'Ov0za6Xb1LM.1514', u'QCLQYnt3aMo.1117', u'Z1YV6wB037M.1173', u'Z1YV6wB037M.1177', u'OGNnUvJq9RI.1037',
-                     u'Lg1jOu8cUBM.1317', u'Lg1jOu8cUBM.1041', u'om_83F5VwTQ.1700', u'OGNnUvJq9RI.0948', u'om_83F5VwTQ.1684', u'ZosVdkY76FU.1545',
-                     u'ZosVdkY76FU.1502', u'ZosVdkY76FU.1511', u'bePts02nIY8.1506', u'5BDj0ow5hnA.1701', u'5BDj0ow5hnA.1345', u'SCh-ZImnyyk.1747',
-                     u'QTmwhrVal1g.1230', u'XpGRS72ghag.0943', u'bePts02nIY8.0969', u'yn9WN9lsHRE.1274', u'z-fsLpGHq6o.1253', u'rXFlJbXyZyc.0970',
-                     u'1j20qq1JyX4.1414', u'om_83F5VwTQ.1725', u'G4qq1MRXCiY.1605', u'NO2esmws190.1551', u'wONG7Vh87B4.1196', u'jE0S8gYWftE.1768',
-                     u'6d5u6FHvz7Q.1738', u'b-YoBU0XT90.1392', u'bePts02nIY8.1472', u'b-YoBU0XT90.1396', u'o4xQ-BEa3Ss.1442', u'bePts02nIY8.1480',
-                     u'CZ2NP8UsPuE.1006', u'KVq6If6ozMY.1706', u'_dBTTYDRdRQ.1170', u'KHHgQ_Pe4cI.1758', u'XpGRS72ghag.1723', u'sNQJfYvhcPk.1567',
-                     u'WSPvfxtqisg.1140', u'sNQJfYvhcPk.1570', u'Di1MG6auDYo.1242', u'Di1MG6auDYo.1224', u'ZosVdkY76FU.1125', u'ZosVdkY76FU.1150',
-                     u'SCh-ZImnyyk.1792', u'ZosVdkY76FU.1129', u'9F2voT6QWvQ.1742', u'QCLQYnt3aMo.1050', u'j5jmjhGBW44.1195', u'QCLQYnt3aMo.1059',
-                     u'KVq6If6ozMY.1134', u'Z1YV6wB037M.1246', u'2PpxiG0WU18.1129', u'914yZXz-iRs.1225', u'_7oWZq_s_Sk.1146', u'9F2voT6QWvQ.0941',
-                     u'oifTDWZvOhY.1530', u'yn9WN9lsHRE.1146', u'om_83F5VwTQ.0903', u'Hscyg0vLKc8.1201', u'UOyyTUX5Vo4.1166', u'_dBTTYDRdRQ.1295',
-                     u'G4qq1MRXCiY.1662', u'5BDj0ow5hnA.1572', u'5BDj0ow5hnA.0977', u'IzvOYVMltkI.1417', u'er7eeiJB6dI.0912', u'Z1YV6wB037M.1341',
-                     u'z-fsLpGHq6o.1246', u'Z1YV6wB037M.1340', u'z-fsLpGHq6o.1652', u'QCLQYnt3aMo.1332', u'5BDj0ow5hnA.1420', u'bePts02nIY8.0967',
-                     u'55Ihr6uVIDA.1672', u'NO2esmws190.1187', u'z-fsLpGHq6o.1418', u'covMYDBa5dk.1597', u'_dBTTYDRdRQ.1287', u'zC5Fh2tTS1U.1555',
-                     u'UrsCy6qIGoo.1083', u'covMYDBa5dk.1463', u'wONG7Vh87B4.1057', u'QTmwhrVal1g.0908', u'wONG7Vh87B4.1053', u'2PpxiG0WU18.1134',
-                     u'UrsCy6qIGoo.1051', u'qx2vAO5ofmo.1792', u'qx2vAO5ofmo.1795', u'UrsCy6qIGoo.1091', u'QCLQYnt3aMo.1066', u'j5jmjhGBW44.1008',
-                     u'OGNnUvJq9RI.1101', u'l2XO3tQk8lI.1607', u'jE0S8gYWftE.1108', u'fpprSy6AzKk.1617', u'jE0S8gYWftE.1109', u'tghXjom3120.1710',
-                     u'tghXjom3120.1722', u'uNT6HrrnqPU.1386', u'tghXjom3120.1718', u'QCLQYnt3aMo.1049', u'fpprSy6AzKk.1027', u'KVq6If6ozMY.1510',
-                     u'fpprSy6AzKk.1456', u'zC5Fh2tTS1U.1658', u'rXFlJbXyZyc.1395', u'om_83F5VwTQ.1274', u'7T5G0CmwTPo.1486', u'z-fsLpGHq6o.1521',
-                     u'_7oWZq_s_Sk.1643', u'_dBTTYDRdRQ.1214', u'7T5G0CmwTPo.1520', u'j5jmjhGBW44.1121', u'fpprSy6AzKk.1584', u'5BDj0ow5hnA.1578',
-                     u'9F2voT6QWvQ.0921', u'_eBah6c5kyA.0987', u'qx2vAO5ofmo.1662', u'jE0S8gYWftE.1108', u'l2XO3tQk8lI.1506', u'G4qq1MRXCiY.0979']
-
 
 if __name__ == '__main__':
     main()
