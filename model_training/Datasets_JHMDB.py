@@ -148,11 +148,11 @@ class Data_JHMDB:
         return val_segments
 
     ## filters samples with no detected people!!!!
-    def filter_no_detections(sample, labels_np, rois_np, no_det, segment_key):
+    def filter_no_detections(self, sample, labels_np, rois_np, no_det, segment_key):
         rois_bool = tf.cast(rois_np, tf.bool)
         return tf.reduce_any(rois_bool)
 
-    def get_data(segment_key, split):
+    def get_data(self, segment_key, split):
         
         sample, center_frame = self.get_video_frames(segment_key, split)
         labels_np, rois_np, no_det = self.get_labels(segment_key,split, center_frame)
