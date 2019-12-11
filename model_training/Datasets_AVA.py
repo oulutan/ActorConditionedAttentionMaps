@@ -436,7 +436,7 @@ class Data_AVA:
             dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=self.PREPROCESS_CORES)
             #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
             #dataset = dataset.shuffle(len(tfrecord_list)//3)
-            dataset = dataset.shuffle(len(tfrecord_list)//8)
+            #dataset = dataset.shuffle(len(tfrecord_list)//8)
             dataset = dataset.repeat()# repeat infinitely
             #dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
             dataset = dataset.map(self.get_tfrecord, num_parallel_calls=self.PREPROCESS_CORES)

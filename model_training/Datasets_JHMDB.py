@@ -47,8 +47,8 @@ class Data_JHMDB:
         #SPLIT_NO = 1
         self.SPLIT_NO = 1
 
-        self.MODEL_SAVER_PATH = self.JHMDB_FOLDER + '/ckpts/split_%i_model_ckpt' % SPLIT_NO
-        self.RESULT_SAVE_PATH = self.JHMDB_FOLDER + '/ActionResults/split_%i' % SPLIT_NO
+        self.MODEL_SAVER_PATH = self.JHMDB_FOLDER + '/ckpts/split_%i_model_ckpt' % self.SPLIT_NO
+        self.RESULT_SAVE_PATH = self.JHMDB_FOLDER + '/ActionResults/split_%i' % self.SPLIT_NO
         
         # max amount of rois in a single image
         # this initializes the roi vector sizes as well

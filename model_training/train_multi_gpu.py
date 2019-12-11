@@ -13,6 +13,7 @@ from tqdm import tqdm
 # import dataset_ava
 # import dataset_jhmdb
 from Datasets_AVA import Data_AVA
+from Datasets_JHMDB import Data_JHMDB
 import process_results
 import input_augmentation
 import model_layers
@@ -192,7 +193,9 @@ class Model_Trainer():
 
     def set_data_inputs(self):
         if self.dataset_str == 'ava':
-            self.data_obj = Data_AVA(self.batch_size, self.no_gpus)
+            self.data_obj = Data_AVA(self.batch_size, self.no_gpus, self.run_test)
+        elif self.dataset_str == 'jhmdb':
+            self.data_obj = Data_JHMDB(self.batch_size, self.no_gpus, self.run_test)
             
 
         
