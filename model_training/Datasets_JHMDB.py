@@ -55,6 +55,8 @@ class Data_JHMDB:
         self.MAX_ROIS = 100
         self.MAX_ROIS_IN_TRAINING = 20
 
+        self.final_layer = 'softmax' # sigmoid or softmax
+
 
         # jhmdb learning rates for cosine
         # lr_max = 0.001
@@ -215,6 +217,122 @@ class Data_JHMDB:
 
         return labels_np, rois_np, no_det
 
+    def setup_tfdatasets(self):
+        train_detection_segments = self.get_train_list()    
+        split = 'train'
+
+        #               [sample, labels_np, rois_np, no_det, segment_key] 
+        output_types = [tf.uint8, tf.int64, tf.float32, tf.int64, tf.string]
+        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+
+        # shuffle the list outside tf so I know the order. 
+        #np.random.seed(5)
+        # np.random.seed(7)
+        np.random.shuffle(train_detection_segments)
+
+
+        dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
+        dataset = dataset.shuffle(len(train_detection_segments)//8)
+        dataset = dataset.repeat()# repeat infinitely
+        dataset = dataset.map(lambda seg_key, c_split: 
+                tuple(tf.py_func(self.get_data, [seg_key,c_split], output_types)),
+                num_parallel_calls=self.PREPROCESS_CORES)
+
+        # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
+        #                                 cycle_length=10, block_length=1)
+        dataset = dataset.filter(self.filter_no_detections)
+        #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 200)
+        #dataset = dataset.prefetch(buffer_size=BUFFER_SIZE * self.no_gpus)
+        dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
+        dataset = dataset.prefetch(buffer_size=self.BUFFER_SIZE)
+        self.training_dataset = dataset
+        self.train_detection_segments = train_detection_segments
+        
+        if not self.run_test:
+            val_detection_segments = self.get_val_list()
+            split = 'val'
+                
+        else:
+            val_detection_segments = self.get_test_list()
+            split = 'test'
+        
+
+        #               [sample, labels_np, rois_np, no_det, segment_key] 
+        # output_types = [tf.uint8, tf.int32, tf.float32, tf.int64, tf.string]
+        #output_types = [tf.float32, tf.int32, tf.float32, tf.int64, tf.string]
+
+        # shuffle with a known seed so that we always get the same samples while validating on like first 500 samples
+        #if not self.evaluate:
+        #if True:
+        #    np.random.seed(10)
+        #    np.random.shuffle(val_detection_segments)
+
+
+        dataset = tf.data.Dataset.from_tensor_slices((val_detection_segments,[split]*len(val_detection_segments)))
+        dataset = dataset.repeat()# repeat infinitely
+        dataset = dataset.map(lambda seg_key, c_split: 
+                tuple(tf.py_func(self.get_data, [seg_key,c_split], output_types)),
+                num_parallel_calls=self.PREPROCESS_CORES * self.no_gpus)
+
+            
+        # dataset = dataset.prefetch(buffer_size=BUFFER_SIZE)
+        dataset = dataset.filter(self.filter_no_detections)
+        dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
+        dataset = dataset.prefetch(buffer_size=self.BUFFER_SIZE)
+        self.validation_dataset = dataset
+        self.val_detection_segments = val_detection_segments
+
+        # skip validation
+        # self.val_detection_segments = val_detection_segments[:200]
+        
+
+
+        #### configure the input selector
+        self.input_handle = tf.placeholder(tf.string, shape=[])
+        iterator = tf.data.Iterator.from_string_handle( self.input_handle, self.training_dataset.output_types, self.training_dataset.output_shapes)
+
+        next_element = iterator.get_next()
+
+        # Define shapes of the inputs coming from python functions
+        input_batch, labels, rois, no_dets, segment_keys = next_element
+
+        # input_batch = tf.cast(input_batch, tf.float32)
+
+        input_batch.set_shape([None, self.INPUT_T, self.INPUT_H, self.INPUT_W, 3])
+        #labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
+        labels.set_shape([None, self.MAX_ROIS_IN_TRAINING, self.NUM_CLASSES])
+        #rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
+        rois.set_shape([None, self.MAX_ROIS_IN_TRAINING, 4])
+        no_dets.set_shape([None])
+        segment_keys.set_shape([None])
+        
+
+        self.input_batch = input_batch
+        self.labels =labels
+        self.rois = rois
+        self.no_dets = no_dets
+        self.segment_keys = segment_keys
+
+        return input_batch, labels, rois, no_dets, segment_keys
+
+        
+    def initialize_data_iterators(self, sess):
+        self.training_iterator = self.training_dataset.make_one_shot_iterator()
+        self.validation_iterator = self.validation_dataset.make_initializable_iterator()
+
+        # The `Iterator.string_handle()` method returns a tensor that can be evaluated
+        # and used to feed the `handle` placeholder.
+        self.training_handle = sess.run(self.training_iterator.string_handle())
+        self.validation_handle = sess.run(self.validation_iterator.string_handle())
+        
+        sess.run(self.validation_iterator.initializer)
+
+    def select_iterator(self, feed_dict, is_training):
+        if is_training:
+            feed_dict[self.input_handle] = self.training_handle
+        else:
+            feed_dict[self.input_handle] = self.validation_handle
+
 
 
     
@@ -373,3 +491,38 @@ def IoU_box(box1, box2):
     
 
 
+if __name__ == '__main__':
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+    ava = Data_AVA()
+
+    vallist = ava.get_val_list()
+
+    # test basic functions
+    segment_key = vallist[0]
+    split = 'val'
+    obj = ava.get_obj_detection_results(segment_key, split)
+    frames = ava.get_video_frames(segment_key, split)
+    np_sample = ava.get_data(segment_key, split)
+
+    # test tfrecords
+    sess = tf.Session()
+    init_op = tf.global_variables_initializer()
+    sess.run(init_op)
+    
+    input_batch, labels, rois, no_dets, segment_keys = ava.setup_tfdatasets()
+    
+    ava.initialize_data_iterators(sess)
+
+    feed_dict = {}
+    ava.select_iterator(feed_dict, is_training=True)
+    np_stuff = sess.run([input_batch, labels, rois, no_dets, segment_keys], feed_dict)
+
+    feed_dict = {}
+    ava.select_iterator(feed_dict, is_training=False)
+    np_stuff = sess.run([input_batch, labels, rois, no_dets, segment_keys], feed_dict)
+
+    # import pdb;pdb.set_trace()
+
+    print('Tests Passed!')

@@ -75,6 +75,8 @@ class Data_AVA:
         #UPDATE_FOR_CROPS = True
         self.UPDATE_FOR_CROPS = False
         # USE_TRACKER_TEMPORAL_ROIS = False
+
+        self.final_layer = 'sigmoid' # sigmoid or softmax
         
         
         with open(self.DATA_FOLDER+'label_conversions.json') as fp:
@@ -443,6 +445,7 @@ class Data_AVA:
 
         else:
             dataset = tf.data.Dataset.from_tensor_slices((train_detection_segments,[split]*len(train_detection_segments)))
+            dataset = dataset.shuffle(len(tfrecord_list)//8)
             dataset = dataset.repeat()# repeat infinitely
             dataset = dataset.map(lambda seg_key, c_split: 
                     tuple(tf.py_func(self.get_data, [seg_key,c_split], output_types)),
@@ -676,7 +679,7 @@ class Data_AVA:
             # cur_preds = np.random.uniform(size=40)
             # cur_preds = [0 for _ in range(40)]
 
-            for cc in range(NUM_CLASSES):
+            for cc in range(self.NUM_CLASSES):
                 class_results[cc]['truth'].append(cur_truths[cc])
                 class_results[cc]['pred'].append(cur_preds[cc])
 
