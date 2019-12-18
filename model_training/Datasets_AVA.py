@@ -438,7 +438,7 @@ class Data_AVA:
             dataset = tf.data.TFRecordDataset(tfrecord_list, num_parallel_reads=self.PREPROCESS_CORES)
             #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 2000)
             #dataset = dataset.shuffle(len(tfrecord_list)//3)
-            #dataset = dataset.shuffle(len(tfrecord_list)//8)
+            dataset = dataset.shuffle(len(tfrecord_list)//8)
             dataset = dataset.repeat()# repeat infinitely
             #dataset = dataset.map(dataset_ava.get_tfrecord, num_parallel_calls=PREPROCESS_CORES * self.no_gpus)
             dataset = dataset.map(self.get_tfrecord, num_parallel_calls=self.PREPROCESS_CORES)
@@ -451,11 +451,7 @@ class Data_AVA:
                     tuple(tf.py_func(self.get_data, [seg_key,c_split], output_types)),
                     num_parallel_calls=self.PREPROCESS_CORES)
 
-        # dataset = dataset.interleave(lambda x: dataset.from_tensors(x).repeat(2),
-        #                                 cycle_length=10, block_length=1)
         dataset = dataset.filter(self.filter_no_detections)
-        #dataset = dataset.shuffle(self.batch_size * self.no_gpus * 200)
-        #dataset = dataset.prefetch(buffer_size=BUFFER_SIZE * self.no_gpus)
         dataset = dataset.batch(batch_size=self.batch_size*self.no_gpus)
         dataset = dataset.prefetch(buffer_size=self.BUFFER_SIZE)
         self.training_dataset = dataset

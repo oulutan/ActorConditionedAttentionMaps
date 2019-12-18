@@ -192,7 +192,7 @@ class Data_JHMDB:
             sample = np.zeros([self.INPUT_T, self.INPUT_H, self.INPUT_W, 3], np.uint8)
             print("IO ERROR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
 
-        return sample.astype(np.float32), center_frame
+        return sample, center_frame
 
     def get_labels(self, segment_key, split, center_frame):
         vidname, frame_info = segment_key.split(' ')
@@ -300,9 +300,9 @@ class Data_JHMDB:
 
         input_batch.set_shape([None, self.INPUT_T, self.INPUT_H, self.INPUT_W, 3])
         #labels.set_shape([None, self.dataset_fcn.MAX_ROIS, self.dataset_fcn.NUM_CLASSES])
-        labels.set_shape([None, self.MAX_ROIS_IN_TRAINING, self.NUM_CLASSES])
+        labels.set_shape([None, self.MAX_ROIS, self.NUM_CLASSES])
         #rois.set_shape([None, self.dataset_fcn.MAX_ROIS, 4])
-        rois.set_shape([None, self.MAX_ROIS_IN_TRAINING, 4])
+        rois.set_shape([None, self.MAX_ROIS, 4])
         no_dets.set_shape([None])
         segment_keys.set_shape([None])
         
@@ -369,7 +369,7 @@ class Data_JHMDB:
     
         # assume less than #MAX_ROIS boxes in each image
         if no_det > self.MAX_ROIS: print('MORE DETECTIONS THAN MAX ROIS!!')
-        labels_np = np.zeros([self.MAX_ROIS, self.NUM_CLASSES], np.int32)
+        labels_np = np.zeros([self.MAX_ROIS, self.NUM_CLASSES], np.int64)
         rois_np = np.zeros([self.MAX_ROIS, 4], np.float32) # the 0th index will be used as the featmap index
     
         # TODO if no_gt or no_det is 0 this will give error
@@ -495,34 +495,34 @@ if __name__ == '__main__':
     import os
     os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
-    ava = Data_AVA()
+    data_loader = Data_JHMDB()
 
-    vallist = ava.get_val_list()
+    vallist = data_loader.get_val_list()
 
     # test basic functions
     segment_key = vallist[0]
     split = 'val'
-    obj = ava.get_obj_detection_results(segment_key, split)
-    frames = ava.get_video_frames(segment_key, split)
-    np_sample = ava.get_data(segment_key, split)
+    #obj = data_loader.get_obj_detection_results(segment_key, split)
+    #frames = data_loader.get_video_frames(segment_key, split)
+    np_sample = data_loader.get_data(segment_key, split)
 
     # test tfrecords
     sess = tf.Session()
     init_op = tf.global_variables_initializer()
     sess.run(init_op)
     
-    input_batch, labels, rois, no_dets, segment_keys = ava.setup_tfdatasets()
+    input_batch, labels, rois, no_dets, segment_keys = data_loader.setup_tfdatasets()
     
-    ava.initialize_data_iterators(sess)
+    data_loader.initialize_data_iterators(sess)
 
     feed_dict = {}
-    ava.select_iterator(feed_dict, is_training=True)
+    data_loader.select_iterator(feed_dict, is_training=True)
     np_stuff = sess.run([input_batch, labels, rois, no_dets, segment_keys], feed_dict)
 
     feed_dict = {}
-    ava.select_iterator(feed_dict, is_training=False)
+    data_loader.select_iterator(feed_dict, is_training=False)
     np_stuff = sess.run([input_batch, labels, rois, no_dets, segment_keys], feed_dict)
 
-    # import pdb;pdb.set_trace()
+    import pdb;pdb.set_trace()
 
     print('Tests Passed!')

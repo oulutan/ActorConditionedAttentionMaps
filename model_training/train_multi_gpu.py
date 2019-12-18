@@ -432,13 +432,14 @@ class Model_Trainer():
             fl_input_labels = tf.cast(input_labels, tf.float32)
             # loss_val = tf.losses.softmax_cross_entropy(labels_one_hot, logits)
             # pred_probs = tf.nn.softmax(logits)
-            if self.dataset_str == 'jhmdb':
+            #if self.dataset_str == 'jhmdb':
+            if self.data_obj.final_layer == "softmax":
                 pred_probs = tf.nn.softmax(logits)
                 logging.info("Optimizing on Softmax Loss")
                 softmax_loss = tf.nn.softmax_cross_entropy_with_logits(labels=fl_input_labels,
                                                                 logits=logits)
                 per_roi_loss = softmax_loss
-            else:
+            elif self.data_obj.final_layer == "sigmoid":
             #if True:
             # In our case each logit is a probability itself
                 pred_probs = tf.nn.sigmoid(logits)
@@ -454,6 +455,8 @@ class Model_Trainer():
                 #class_filter = np.zeros([60])
                 #class_filter[np.array(focus_on_classes)] = 1.
                 #per_roi_loss = tf.reduce_sum(sigmoid_loss*class_filter, axis=1) / tf.cast(tf.reduce_sum(class_filter), tf.float32)
+            else:
+                raise NotImplementedError
             # loss_val = tf.reduce_mean(-tf.reduce_sum(tf.cast(input_labels, tf.float32) * tf.log(tf.clip_by_value(pred_probs, 1e-10, 1e10)), reduction_indices=[1]))
             pred_probs = tf.clip_by_value(pred_probs, 1e-5, 1.0 - 1e-5)
             # pred_probs = tf.Print(pred_probs, [pred_probs], 'pred_probs:')
