@@ -639,7 +639,7 @@ class Data_AVA:
     def process_evaluation_results_old(self, res_name):
         
         logging.info('Generating ava style results')
-        subprocess.call(['python', self.ACAM_FOLDER + '/model_training/result_validation.py', '--result_name', res_name])
+        subprocess.call(['python', self.ACAM_FOLDER + '/model_training/ava_result_validation.py', '--result_name', res_name])
         
         logging.info('Calculating final AP values')
         subprocess.call(['bash', self.ACAM_FOLDER + '/evaluation/run_ava_detection.sh', res_name])
@@ -650,7 +650,7 @@ class Data_AVA:
     def process_evaluation_results(self, res_name):
         
         logging.info('Generating ava style results')
-        subprocess.call(['python', self.ACAM_FOLDER + '/model_training/result_validation_v2.py', '--result_name', res_name])
+        subprocess.call(['python', self.ACAM_FOLDER + '/model_training/ava_result_validation_v2.py', '--result_name', res_name])
         
         logging.info('Calculating final AP values')
         subprocess.call(['bash', self.ACAM_FOLDER + '/evaluation/run_ava_detection.sh', res_name])
