@@ -1,3 +1,77 @@
+This repo is based on maskrcnn-benchmark codebase from facebook and focuses on training and running the object detectors on the AVA dataset and other datasets. It produces outputs in a format which can be usable by the Actor Conditioned Attention Maps action detection model. 
+
+Original Repo:
+https://github.com/facebookresearch/maskrcnn-benchmark
+
+# Installation
+
+1. pip install torch==1.1.0 torchvision==0.3.0 -f https://download.pytorch.org/whl/torch_stable.html
+2. pip install ninja yacs cython matplotlib tqdm opencv-contrib-python
+3. Follow these scripts. We will download cocoapi here as well
+
+```bash
+## in ./maskrcnn-benchmark
+# install pycocotools
+git clone https://github.com/cocodataset/cocoapi.git
+cd cocoapi/PythonAPI
+python setup.py build_ext install
+
+cd ../..
+## back in ./maskrcnn-benchmark
+# install PyTorch Detection
+
+# the following will install the lib with
+# symbolic links, so that you can modify
+# the files if you want and won't need to
+# re-build it
+python setup.py build develop
+
+
+```
+# Test installation
+
+```bash
+cd AVA_scripts
+wget https://download.pytorch.org/models/maskrcnn/e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth
+python run_on_single_image.py
+```
+
+# Run actor detector on AVA
+
+1. You can either use the model weights provided by facebook which is trained on COCO dataset or weights from the following link which I fine-tuned on AVA for actor detection. Download in ./maskrcnn-benchmark/AVA_scripts
+
+2. In AVA_scripts directory run the 03_keyframe_detect_objects.py script while the ACAM_DIR environment variable is set. (cd back to ActorConditionedAttentionMaps and run source set_environment.sh)
+
+3. You have to change splits (train, val, test) manually in the first couple lines of the file (03_keyframe_detect_objects.py) to run it on different data splits of AVA.
+
+# Run actor detector on your own dataset for extracting actors for training ACAM
+
+1. As we mentioned in the paper for any other datasets, its better to use COCO trained checkpoints compared to AVA tuned. Have all of your midframes in a single folder (ln or cp them) and run run_on_folder.py. 
+
+2. This will create object detection results readable by ACAM. 
+
+# Fine tune actor detector on AVA
+
+1. Set the ACAM_DIR env: cd back to ActorConditionedAttentionMaps and run source set_environment.sh
+
+2. Go to ./maskrcnn-benchmark/datasets/ava and run cp_and_rename_midframe.py for train and val (change first lines again for splits)
+
+3. Optional, Run generate_coco_style_anns.py to convert ava to cocostyle. This is optional as I am providing the converted anns in this repo. 
+
+4. Go back to ./maskrcnn-benchmark and start training with the following command. 
+
+```bash
+python tools/train_net.py --config-file AVA_scripts/e2e_faster_rcnn_X_101_32x8d_FPN_1x_ava.yaml
+```
+
+You might have to change the IMS_PER_BATCH in the config file if your GPU runs out of memory. This will fine-tune the COCO trained model weights on AVA actors which will improve performance on AVA. I trained until 255000th iteration (it starts from 180000 which is the end of COCO iterations)
+
+
+
+
+# ---------------------- Original Readme from facebook -------------------
+
+
 # Faster R-CNN and Mask R-CNN in PyTorch 1.0
 
 This project aims at providing the necessary building blocks for easily
