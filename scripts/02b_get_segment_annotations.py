@@ -13,6 +13,9 @@ AVA_FOLDER = os.environ['ACAM_DIR'] + '/data/AVA'
 annotations_folder = AVA_FOLDER + '/annotations/'
 data_folder = AVA_FOLDER + '/data/'
 
+####################################### THIS IS FOR UPDATING ANNOTATION FILES. YOU DONT HAVE TO RUN THIS IF YOU ARE RUNNING 02_crop##############################
+print("THIS IS FOR UPDATING ANNOTATION FILES. YOU DONT HAVE TO RUN THIS IF YOU ARE RUNNING 02_crop ")
+
 #split = 'train'
 #split = 'val'
 split = 'test'
