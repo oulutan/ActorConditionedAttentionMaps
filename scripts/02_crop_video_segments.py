@@ -149,7 +149,7 @@ def main():
         
         combined_annotation_dict[segment_key] = boxes_list
 
-    with open(data_folder + 'segment_annotations_%s.json' % split, 'w') as fp:
+    with open(data_folder + 'segment_annotations_v22_%s.json' % split, 'w') as fp:
         json.dump(combined_annotation_dict, fp)
 
     segment_keys.sort()
@@ -297,7 +297,7 @@ def main_test():
         
         combined_annotation_dict[segment_key] = boxes_list
 
-    with open(data_folder + 'segment_annotations_%s.json' % split, 'w') as fp:
+    with open(data_folder + 'segment_annotations_v22_%s.json' % split, 'w') as fp:
         json.dump(combined_annotation_dict, fp)
     print('Saved segment annotations!')
     # import pdb;pdb.set_trace()
