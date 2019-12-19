@@ -40,13 +40,17 @@ python run_on_single_image.py
 
 1. You can either use the model weights provided by facebook which is trained on COCO dataset or weights from the following link which I fine-tuned on AVA for actor detection. Download in `./maskrcnn-benchmark/AVA_scripts`
 
+original weights on COCO: https://download.pytorch.org/models/maskrcnn/e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth
+
+Fine-tuned on AVA: https://drive.google.com/open?id=1i9AJeSO8t1A6twMucpWx1gQXxM-O_ohh
+
 2. In `AVA_scripts` directory run the `03_keyframe_detect_objects.py` script while the `ACAM_DIR` environment variable is set. (cd back to `ActorConditionedAttentionMaps` and run `source set_environment.sh`)
 
 3. You have to change splits (train, val, test) manually in the first couple lines of the file (`03_keyframe_detect_objects.py`) to run it on different data splits of AVA.
 
 # Run actor detector on your own dataset for extracting actors for training ACAM
 
-1. As we mentioned in the paper for any other datasets, its better to use COCO trained checkpoints compared to AVA tuned. Have all of your midframes in a single folder (ln or cp them) and run `run_on_folder.py`. 
+1. As we mentioned in the paper for any other datasets, its better to use COCO trained checkpoints compared to AVA tuned. Have all of your midframes in a single folder (ln or cp them) and run `run_on_folder.py` in `AVA_scripts`. 
 
 2. This will create object detection results readable by ACAM. 
 
