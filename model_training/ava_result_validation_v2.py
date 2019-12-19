@@ -1,9 +1,11 @@
 import numpy as np
 import json
-import dataset_ava
+import Datasets_AVA
 import os
 import argparse
 from tqdm import tqdm
+
+dataset_ava = Datasets_AVA.Data_AVA()
 
 
 # RESULT_NAME = 'VALIDATION_Results_I3DTail_5gpu_20'
@@ -407,7 +409,7 @@ def non_max_suppression(result_list):
         max_IoU = 0.0
         for pp in range(len(picks)):
             pick_box = picks[pp]['box']
-            IoU = dataset_ava.IoU_box(cur_box, pick_box)
+            IoU = Datasets_AVA.IoU_box(cur_box, pick_box)
             if IoU > max_IoU: max_IoU = IoU
 
         if max_IoU < IoU_th:
