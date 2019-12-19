@@ -38,27 +38,27 @@ python run_on_single_image.py
 
 # Run actor detector on AVA
 
-1. You can either use the model weights provided by facebook which is trained on COCO dataset or weights from the following link which I fine-tuned on AVA for actor detection. Download in ./maskrcnn-benchmark/AVA_scripts
+1. You can either use the model weights provided by facebook which is trained on COCO dataset or weights from the following link which I fine-tuned on AVA for actor detection. Download in `./maskrcnn-benchmark/AVA_scripts`
 
-2. In AVA_scripts directory run the 03_keyframe_detect_objects.py script while the ACAM_DIR environment variable is set. (cd back to ActorConditionedAttentionMaps and run source set_environment.sh)
+2. In `AVA_scripts` directory run the `03_keyframe_detect_objects.py` script while the `ACAM_DIR` environment variable is set. (cd back to `ActorConditionedAttentionMaps` and run `source set_environment.sh`)
 
-3. You have to change splits (train, val, test) manually in the first couple lines of the file (03_keyframe_detect_objects.py) to run it on different data splits of AVA.
+3. You have to change splits (train, val, test) manually in the first couple lines of the file (`03_keyframe_detect_objects.py`) to run it on different data splits of AVA.
 
 # Run actor detector on your own dataset for extracting actors for training ACAM
 
-1. As we mentioned in the paper for any other datasets, its better to use COCO trained checkpoints compared to AVA tuned. Have all of your midframes in a single folder (ln or cp them) and run run_on_folder.py. 
+1. As we mentioned in the paper for any other datasets, its better to use COCO trained checkpoints compared to AVA tuned. Have all of your midframes in a single folder (ln or cp them) and run `run_on_folder.py`. 
 
 2. This will create object detection results readable by ACAM. 
 
 # Fine tune actor detector on AVA
 
-1. Set the ACAM_DIR env: cd back to ActorConditionedAttentionMaps and run source set_environment.sh
+1. Set the ACAM_DIR env: cd back to `ActorConditionedAttentionMaps` and run `source set_environment.sh`
 
-2. Go to ./maskrcnn-benchmark/datasets/ava and run cp_and_rename_midframe.py for train and val (change first lines again for splits)
+2. Go to `./maskrcnn-benchmark/datasets/ava` and run `cp_and_rename_midframe.py` for train and val (change first lines again for splits)
 
-3. Optional, Run generate_coco_style_anns.py to convert ava to cocostyle. This is optional as I am providing the converted anns in this repo. 
+3. Optional, Run `generate_coco_style_anns.py` to convert ava to cocostyle. This is optional as I am providing the converted anns in this repo. 
 
-4. Go back to ./maskrcnn-benchmark and start training with the following command. 
+4. Go back to `./maskrcnn-benchmark` and start training with the following command. 
 
 ```bash
 python tools/train_net.py --config-file AVA_scripts/e2e_faster_rcnn_X_101_32x8d_FPN_1x_ava.yaml
