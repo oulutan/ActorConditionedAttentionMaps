@@ -40,9 +40,9 @@ def read_keyframe(segment_key):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-t', '--total_no_sets', type=int, required=True)
-    parser.add_argument('-c', '--current_set', type=int, required=True)
-    parser.add_argument('-g', '--gpu', type=str, required=True)
+    parser.add_argument('-t', '--total_no_sets', type=int, required=False, default=1)
+    parser.add_argument('-c', '--current_set', type=int, required=False, default=0)
+    parser.add_argument('-g', '--gpu', type=str, required=False, default=0)
     # NO_GPUS = 4
     # CUR_GPU = 0 # zero based
     #parser.add_argument('-g', '--gpu', type=str, required=True)
@@ -88,7 +88,8 @@ def main():
     cur_movies = movies[start_idx:end_idx]
 
 
-    config_file = "../configs/e2e_faster_rcnn_X_101_32x8d_FPN_1x.yaml"
+    #config_file = "../configs/e2e_faster_rcnn_X_101_32x8d_FPN_1x.yaml"
+    config_file = "e2e_faster_rcnn_X_101_32x8d_FPN_1x_ava.yaml"
     
     # update the config options with the config file
     cfg.merge_from_file(config_file)
