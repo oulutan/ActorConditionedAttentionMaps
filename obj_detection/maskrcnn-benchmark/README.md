@@ -1,3 +1,50 @@
+This repo is based on maskrcnn-benchmark codebase from facebook and focuses on training and running the object detectors on the AVA dataset and other datasets. It produces outputs in a format which can be usable by the Actor Conditioned Attention Maps action detection model. 
+
+Original Repo:
+https://github.com/facebookresearch/maskrcnn-benchmark
+
+# Installation
+
+1. pip install torch==1.1.0 torchvision==0.3.0 -f https://download.pytorch.org/whl/torch_stable.html
+2. pip install ninja yacs cython matplotlib tqdm opencv-contrib-python
+3. Follow these scripts. We will download cocoapi here as well
+
+```bash
+## in ./maskrcnn-benchmark
+# install pycocotools
+git clone https://github.com/cocodataset/cocoapi.git
+cd cocoapi/PythonAPI
+python setup.py build_ext install
+
+cd ../..
+## back in ./maskrcnn-benchmark
+# install PyTorch Detection
+
+# the following will install the lib with
+# symbolic links, so that you can modify
+# the files if you want and won't need to
+# re-build it
+python setup.py build develop
+
+
+```
+# Test installation
+
+```bash
+cd AVA_scripts
+wget https://download.pytorch.org/models/maskrcnn/e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth
+python run_on_single_image.py
+```
+
+# Run on AVA
+
+In AVA_scripts directory run the 03_keyframe_detect_objects.py script while the ACAM_DIR environment variable is set. (cd back to ActorConditionedAttentionMaps and run '''source set_environment.sh''')
+
+
+
+---------------------- Original Readme from facebook -------------------
+
+
 # Faster R-CNN and Mask R-CNN in PyTorch 1.0
 
 This project aims at providing the necessary building blocks for easily
