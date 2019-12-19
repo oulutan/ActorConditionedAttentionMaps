@@ -6,15 +6,16 @@ from joblib import Parallel, delayed
 
 # AVA_FOLDER = '/media/sidious_data/AVA'
 # AVA_FOLDER = '/data/home/ulutan/sidious_data/AVA'
-AVA_FOLDER = os.environ['AVA_DIR'] + '/AVA'
-movies_folder = AVA_FOLDER + '/movies/'
+ACAM_FOLDER = os.environ['ACAM_DIR']
+AVA_FOLDER = ACAM_FOLDER + '/data/AVA'
+movies_folder = AVA_FOLDER + '/movies/trainval/'
 movies_folder_test = AVA_FOLDER + '/movies/test/'
 segments_folder = AVA_FOLDER + '/segments/'
 annotations_folder = AVA_FOLDER + '/annotations/'
 data_folder = AVA_FOLDER + '/data/'
 
-# split = 'train'
-split = 'val'
+split = 'train'
+# split = 'val'
 # split = 'test'
 split_folder = os.path.join(segments_folder, split)
 
@@ -87,7 +88,7 @@ def main():
     if not os.path.exists(midframes_folder):
         os.mkdir(midframes_folder)
 
-    annotation_file = annotations_folder + 'ava_%s_v2.1.csv' % split
+    annotation_file = annotations_folder + 'ava_%s_v2.2.csv' % split
     with open(annotation_file) as fp:
         file_name_list = fp.read().splitlines()
 
@@ -149,16 +150,14 @@ def main():
     with open(data_folder + 'segment_annotations_%s.json' % split, 'w') as fp:
         json.dump(combined_annotation_dict, fp)
 
-    import pdb;pdb.set_trace()
-
     segment_keys.sort()
     ## stupid hard drive failure fixes
     # print("Working on failure cases only")
     # segment_keys = ["JNb4nWexD0I.0971", "JNb4nWexD0I.0970", "JNb4nWexD0I.0973", "JNb4nWexD0I.0974", "JNb4nWexD0I.0982", "JNb4nWexD0I.0981", "JNb4nWexD0I.0980", "JNb4nWexD0I.0983", "JNb4nWexD0I.0978", "JNb4nWexD0I.0968", "JNb4nWexD0I.0977", "JNb4nWexD0I.0975", "JNb4nWexD0I.0972", "JNb4nWexD0I.0984", "JNb4nWexD0I.0976", "JNb4nWexD0I.0979"]
 
-    # print('Extracting segments!')
-    # for segment_key in segment_keys:
-    #     crop_video_segment(segment_key)
+    print('Extracting segments!')
+    for segment_key in segment_keys:
+        crop_video_segment(segment_key)
     # Parallel(n_jobs=10) (delayed(crop_video_segment)(segment_key, ) for segment_key in segment_keys)
     # Parallel(n_jobs=2) (delayed(crop_video_segment)(segment_key, ) for segment_key in segment_keys)
 
@@ -214,7 +213,7 @@ def main_test():
     
     
 
-    movie_names_file = annotations_folder + 'ava_file_names_test_v2.1.txt'
+    movie_names_file = annotations_folder + 'ava_file_names_test_v2.2.txt'
     with open(movie_names_file) as fp:
         movie_file_names = fp.readlines()
     movie_file_names = [row.strip() for row in movie_file_names]
@@ -237,7 +236,7 @@ def main_test():
         if not os.path.exists(movie_midframes):
             os.mkdir(movie_midframes)
 
-    excluded_timestamps_file = annotations_folder + 'ava_test_excluded_timestamps_v2.1.csv'
+    excluded_timestamps_file = annotations_folder + 'ava_test_excluded_timestamps_v2.2.csv'
     with open(excluded_timestamps_file) as fp:
         excluded_timestamps = fp.read().splitlines()
     # format for excluded: '-FLn0aeA6EU,0913'
@@ -295,8 +294,8 @@ def main_test():
         
         combined_annotation_dict[segment_key] = boxes_list
 
-    #with open(data_folder + 'segment_annotations_%s.json' % split, 'w') as fp:
-    #    json.dump(combined_annotation_dict, fp)
+    with open(data_folder + 'segment_annotations_%s.json' % split, 'w') as fp:
+        json.dump(combined_annotation_dict, fp)
     print('Saved segment annotations!')
     # import pdb;pdb.set_trace()
 
@@ -304,7 +303,7 @@ def main_test():
     # stupid hard drive failure fixes
     # segment_keys = ["WMFTBgYWJS8.0940", "WMFTBgYWJS8.0941", "WMFTBgYWJS8.0944", "WMFTBgYWJS8.0946", "WMFTBgYWJS8.0951", "WMFTBgYWJS8.0969"]
     # segment_keys = ["WMFTBgYWJS8.0949"]
-    segment_keys = ["WMFTBgYWJS8.0937"]
+    #segment_keys = ["WMFTBgYWJS8.0937"]
     print('Extracting segments!')
     #debug
     for segment_key in segment_keys:

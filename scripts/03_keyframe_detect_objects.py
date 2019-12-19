@@ -13,9 +13,9 @@ OBJ_DETECT_PATH = '/home/oytun/work/tensorflow_object/'
 ## Faster
 # OBJ_DETECT_GRAPH_PATH = OBJ_DETECT_PATH + '/zoo/batched_zoo/faster_rcnn_nas_lowproposals_coco_2018_01_28/batched_graph/frozen_inference_graph.pb'
 ## Better
-# OBJ_DETECT_GRAPH_PATH = OBJ_DETECT_PATH + '/zoo/batched_zoo/faster_rcnn_nas_coco_2018_01_28/batched_graph/frozen_inference_graph.pb'
+OBJ_DETECT_GRAPH_PATH = OBJ_DETECT_PATH + '/zoo/batched_zoo/faster_rcnn_nas_coco_2018_01_28/batched_graph/frozen_inference_graph.pb'
 ## Different obj detector
-OBJ_DETECT_GRAPH_PATH = OBJ_DETECT_PATH + '/zoo/batched_zoo/faster_rcnn_resnet101_coco_2018_01_28_lowth/batched_graph/frozen_inference_graph.pb'
+#OBJ_DETECT_GRAPH_PATH = OBJ_DETECT_PATH + '/zoo/batched_zoo/faster_rcnn_resnet101_coco_2018_01_28_lowth/batched_graph/frozen_inference_graph.pb'
 # SPLIT = 'train'
 SPLIT = 'val'
 # SPLIT = 'test'
