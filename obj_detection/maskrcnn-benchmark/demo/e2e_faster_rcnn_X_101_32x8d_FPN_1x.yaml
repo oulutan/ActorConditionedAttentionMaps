@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "demo/e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"
+  WEIGHT: "e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"
   BACKBONE:
     CONV_BODY: "R-101-FPN"
   RPN:
@@ -24,13 +24,13 @@ MODEL:
     NUM_GROUPS: 32
     WIDTH_PER_GROUP: 8
 DATASETS:
-  TRAIN: ("ava_v22_cocostyle_train", )
-  TEST: ("ava_v22_cocostyle_val",)
+  TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
+  TEST: ("coco_2014_minival",)
 DATALOADER:
   SIZE_DIVISIBILITY: 32
 SOLVER:
   BASE_LR: 0.01
   WEIGHT_DECAY: 0.0001
   STEPS: (120000, 160000)
-  MAX_ITER: 360000
+  MAX_ITER: 180000
   IMS_PER_BATCH: 8
