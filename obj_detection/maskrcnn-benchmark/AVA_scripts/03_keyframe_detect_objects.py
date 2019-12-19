@@ -40,6 +40,11 @@ def read_keyframe(segment_key):
 def main():
     parser = argparse.ArgumentParser()
 
+
+    # total_no_sets and current_set is used for splitting the data and running multiple processes manually on different gpus or machines
+    # if total no sets is 1 and then current_set can only be 0 and will run normally(default mode)
+    # if total no sets is 2 lets say, then you have to run this script with current_set=0 and current_set=1 which will split the total data into 2 points and
+    # allows running separately 
     parser.add_argument('-t', '--total_no_sets', type=int, required=False, default=1)
     parser.add_argument('-c', '--current_set', type=int, required=False, default=0)
     parser.add_argument('-g', '--gpu', type=str, required=False, default=0)
