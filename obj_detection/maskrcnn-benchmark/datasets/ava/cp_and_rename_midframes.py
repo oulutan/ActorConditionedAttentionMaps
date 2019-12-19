@@ -3,9 +3,9 @@ import shutil
 from tqdm import tqdm
 import json
 
-#SPLIT = "train"
+SPLIT = "train"
 #SPLIT = "val"
-SPLIT = "test"
+#SPLIT = "test"
 
 AVA_FOLDER = os.environ['ACAM_DIR'] + '/data/AVA'
 SEGMENTS_FOLDER = AVA_FOLDER + '/segments/'

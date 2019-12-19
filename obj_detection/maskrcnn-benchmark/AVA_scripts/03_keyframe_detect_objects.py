@@ -9,9 +9,9 @@ from tqdm import tqdm
 from maskrcnn_benchmark.config import cfg
 from predictor import COCODemo
 
-#SPLIT = 'train'
+SPLIT = 'train'
 #SPLIT = 'val'
-SPLIT = 'test'
+#SPLIT = 'test'
 #OBJ_DETECTION_FREQ = 0.5 # seconds
 DETECTION_TH = 0.01
 

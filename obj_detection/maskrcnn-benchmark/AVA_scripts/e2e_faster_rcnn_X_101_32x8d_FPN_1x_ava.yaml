@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"
+  WEIGHT: "AVA_scripts/e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"
   BACKBONE:
     CONV_BODY: "R-101-FPN"
   RPN:
@@ -33,4 +33,4 @@ SOLVER:
   WEIGHT_DECAY: 0.0001
   STEPS: (120000, 160000)
   MAX_ITER: 360000
-  IMS_PER_BATCH: 8
+  IMS_PER_BATCH: 2
