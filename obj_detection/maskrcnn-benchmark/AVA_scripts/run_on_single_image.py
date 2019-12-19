@@ -18,5 +18,6 @@ coco_demo = COCODemo(
 img_name = "KVq6If6ozMY.1360.jpg"
 image = cv2.imread(img_name)
 predictions = coco_demo.run_on_opencv_image(image)
+cv2.imwrite('output.jpg', predictions)
 cv2.imshow('Predictions', predictions)
 cv2.waitKey(0)
