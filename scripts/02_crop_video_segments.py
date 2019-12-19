@@ -81,6 +81,8 @@ def crop_video_segment(segment_key):
 
 def main():
     print('Generating output folders!')
+    if not os.path.exists(segments_folder):
+        os.mkdir(segments_folder)
     if not os.path.exists(split_folder):
         os.mkdir(split_folder)
     if not os.path.exists(clips_folder):
@@ -92,8 +94,8 @@ def main():
     with open(annotation_file) as fp:
         file_name_list = fp.read().splitlines()
 
-    #The format of a row is the following: video_id, middle_frame_timestamp, person_box, action_id
-    #-5KQ66BBWC4,0904,0.217,0.008,0.982,0.966,12
+    #The format of a row is the following: video_id, middle_frame_timestamp, person_box, action_id, person_id
+    #-5KQ66BBWC4,0904,0.217,0.008,0.982,0.966,12,1
     
     for seg_info in file_name_list:
         movie_key = seg_info.split(',')[0]
@@ -130,7 +132,7 @@ def main():
         boxes_list = []
         for anno in current_anno_list:
             anno_index, seg_info = anno
-            movie_key, timestamp, left, top, right, bottom, action_id  = seg_info.split(',')
+            movie_key, timestamp, left, top, right, bottom, action_id, person_id  = seg_info.split(',')
 
             left, top, right, bottom = [float(coord) for coord in [left, top, right, bottom]]
             current_bbox = (left, top, right, bottom)
@@ -154,12 +156,13 @@ def main():
     ## stupid hard drive failure fixes
     # print("Working on failure cases only")
     # segment_keys = ["JNb4nWexD0I.0971", "JNb4nWexD0I.0970", "JNb4nWexD0I.0973", "JNb4nWexD0I.0974", "JNb4nWexD0I.0982", "JNb4nWexD0I.0981", "JNb4nWexD0I.0980", "JNb4nWexD0I.0983", "JNb4nWexD0I.0978", "JNb4nWexD0I.0968", "JNb4nWexD0I.0977", "JNb4nWexD0I.0975", "JNb4nWexD0I.0972", "JNb4nWexD0I.0984", "JNb4nWexD0I.0976", "JNb4nWexD0I.0979"]
+    print("You can ignore the rm warnings. The code tries to delete the files first in case there is a file with same name.")
 
-    print('Extracting segments!')
+    #print('Extracting segments!')
     for segment_key in segment_keys:
         crop_video_segment(segment_key)
     # Parallel(n_jobs=10) (delayed(crop_video_segment)(segment_key, ) for segment_key in segment_keys)
-    # Parallel(n_jobs=2) (delayed(crop_video_segment)(segment_key, ) for segment_key in segment_keys)
+    # Parallel(n_jobs=4) (delayed(crop_video_segment)(segment_key, ) for segment_key in segment_keys)
 
 ### For test split
 
