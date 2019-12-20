@@ -6,10 +6,15 @@ Work in Progress. Im updating the readme and preparing a tutorial for training o
 All of my python package versions are available in the requirements.txt file. Check there for version issues
 
 Codebase is structured on multiple directories. 
+
 `scripts`: The initial processing scripts. Downloading and processing ava
+
 `model_training`: Includes files for training the ACAM model. Includes data loaders and training files
+
 `data`: All dataset related files go here in their own separate subfolders
+
 `obj_detection`: This is a codebase that focuses on running object detectors on AVA and finetuning it for AVA actors. Based on maskrcnn-benchmark from facebook. https://github.com/facebookresearch/maskrcnn-benchmark
+
 `evaluation`: this includes the evaluation codebase for the AVA. It is a submodule from ACtivityNet and includes some custom files.
 
 1. First of all run `source set_environment.sh` in the main folder `./ActorConditionedAttentionMaps`. This sets the environment which points to the full path of this directory in your system. This is essential as everything uses this env variable. Do this whenever you login or run any of my files. 
