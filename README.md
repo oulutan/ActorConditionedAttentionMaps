@@ -30,3 +30,5 @@ Codebase is structured on multiple directories.
 6. Now the data is ready. Go to `model_training` directory and run `train_multi_gpu.py` file. This script has various arguments which can be checked in between lines 105-115. Most of them have default options except GPU selection. -g argument sets the CUDA_VISIBLE_DEVICES and masks gpus. if you only want to use GPU 0 it should be `-g 0`, if you want to use GPUs 1,2,3 then `-g 1,2,3`. If you are using it in a system with a GPU scheduler, remove this part and handle it manually. 
 
 7. Model will train for 1 epoch and then evaluate the results on the validation set. Periodically check this to see your performance on AVA. This will also generate AVA-style results which could be used for ActivityNet submissions. 
+
+# Training on other Datasets
