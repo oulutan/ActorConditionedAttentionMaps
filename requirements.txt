@@ -71,7 +71,7 @@ torchvision==0.3.0
 tqdm==4.26.0
 traitlets==4.3.2
 wcwidth==0.1.7
-Werkzeug==0.14.1
+Werkzeug==0.15.3
 wget==3.2
 wmctrl==0.3
 yacs==0.1.6
