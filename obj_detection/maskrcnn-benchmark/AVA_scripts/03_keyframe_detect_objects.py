@@ -47,7 +47,7 @@ def main():
     # allows running separately 
     parser.add_argument('-t', '--total_no_sets', type=int, required=False, default=1)
     parser.add_argument('-c', '--current_set', type=int, required=False, default=0)
-    parser.add_argument('-g', '--gpu', type=str, required=False, default=0)
+    parser.add_argument('-g', '--gpu', type=str, required=False, default="0")
     # NO_GPUS = 4
     # CUR_GPU = 0 # zero based
     #parser.add_argument('-g', '--gpu', type=str, required=True)
@@ -98,8 +98,8 @@ def main():
     
     # update the config options with the config file
     cfg.merge_from_file(config_file)
-    #cfg.merge_from_list(["MODEL.WEIGHT", "e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"])
-    cfg.merge_from_list(["MODEL.WEIGHT", "faster_rcnn_ava_model_0255000.pth"])
+    #cfg.merge_from_list(["MODEL.WEIGHT", "e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"]) ### original COCO weights from facebook
+    cfg.merge_from_list(["MODEL.WEIGHT", "faster_rcnn_ava_model_0255000.pth"]) ### finetuned on AVA actors
     
     coco_demo = COCODemo(
         cfg,

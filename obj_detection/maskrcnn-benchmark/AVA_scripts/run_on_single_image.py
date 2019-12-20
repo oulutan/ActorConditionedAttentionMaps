@@ -2,12 +2,14 @@ from maskrcnn_benchmark.config import cfg
 from predictor import COCODemo
 import cv2
 
-config_file = "e2e_faster_rcnn_X_101_32x8d_FPN_1x_ava.yaml"
+#config_file = "e2e_faster_rcnn_X_101_32x8d_FPN_1x_ava.yaml"
+config_file = "../configs/e2e_faster_rcnn_X_101_32x8d_FPN_1x.yaml"
 
 # update the config options with the config file
 cfg.merge_from_file(config_file)
 # manual override some options
 #cfg.merge_from_list(["MODEL.DEVICE", "cpu"])
+cfg.merge_from_list(["MODEL.WEIGHT", "e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"])
 
 coco_demo = COCODemo(
     cfg,
