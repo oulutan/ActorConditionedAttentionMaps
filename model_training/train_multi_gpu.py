@@ -102,15 +102,15 @@ def set_logger(model_id, evaluate, npy_seed, dataset_str):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-l', type=float, default=1e-2, required=False)
+    parser.add_argument('-l', '--base_learning_rate', type=float, default=1e-2, required=False)
     # parser.add_argument('-b', type=int, default=32, required=False)
-    parser.add_argument('-g', type=str, required=True)
-    parser.add_argument('-i', type=str, default='noid', required=False)
-    parser.add_argument('-e', type=str, default='False', required=False)
+    parser.add_argument('-g', '--gpus', type=str, required=True)
+    parser.add_argument('-i', '--run_identifier',type=str, default='noid', required=False)
+    parser.add_argument('-e', '--evaluate_only', type=str, default='False', required=False)
     parser.add_argument('-c', '--ckpt_file', type=str, default='', required=False)
-    parser.add_argument('-t', type=str, default='False', required=False)
-    parser.add_argument('-s', '--seed_npy',type=int, default=0, required=False)
-    parser.add_argument('-b', '--batch_size',type=int, default=DEFAULT_BATCH_SIZE, required=False)
+    parser.add_argument('-t', '--run_test_only', type=str, default='False', required=False)
+    parser.add_argument('-s', '--seed_npy', type=int, default=0, required=False)
+    parser.add_argument('-b', '--batch_size', type=int, default=DEFAULT_BATCH_SIZE, required=False)
     parser.add_argument('-a', '--architecture', type=str, default='i3d_tail', required=False)
     parser.add_argument('-d', '--dataset', type=str, default='ava', required=False) # 'ava' or 'jhmdb'
 

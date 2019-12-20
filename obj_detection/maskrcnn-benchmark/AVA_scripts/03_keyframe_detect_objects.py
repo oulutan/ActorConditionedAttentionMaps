@@ -98,6 +98,8 @@ def main():
     
     # update the config options with the config file
     cfg.merge_from_file(config_file)
+
+    #### if you are changing the weights, change the name for the ouput folder!!!!
     #cfg.merge_from_list(["MODEL.WEIGHT", "e2e_faster_rcnn_X_101_32x8d_FPN_1x.pth"]) ### original COCO weights from facebook
     cfg.merge_from_list(["MODEL.WEIGHT", "faster_rcnn_ava_model_0255000.pth"]) ### finetuned on AVA actors
     
