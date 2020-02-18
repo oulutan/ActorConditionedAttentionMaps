@@ -3,6 +3,8 @@ Work in Progress. Im updating the readme and preparing a tutorial for training o
 
 # Training the model on AVA
 
+Tested on python 2.7.12.
+
 All of my python package versions are available in the requirements.txt file. Check there for version issues
 
 Codebase is structured on multiple directories. 
