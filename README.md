@@ -1,5 +1,18 @@
 # ActorConditionedAttentionMaps
-Work in Progress. Im updating the readme and preparing a tutorial for training on other datasets.
+
+**REAL TIME DEMO CODE AVAILABLE AT**: https://github.com/oulutan/ACAM_Demo/
+
+If you use this work, please cite our paper: 
+
+```
+@inproceedings{ulutan2020actor,
+  title={Actor conditioned attention maps for video action detection},
+  author={Ulutan, Oytun and Rallapalli, Swati and Srivatsa, Mudhakar and Torres, Carlos and Manjunath, BS},
+  booktitle={The IEEE Winter Conference on Applications of Computer Vision},
+  pages={527--536},
+  year={2020}
+}
+```
 
 # Training the model on AVA
 
