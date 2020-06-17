@@ -14,7 +14,7 @@ If you use this work, please cite our paper:
 }
 ```
 
-The demo code achieves 16 fps through webcam using a GTX 1080Ti using multiprocessing and some other tricks. See the video at [real-time demo link](https://drive.google.com/open?id=1T5AJYp1cF0wLnxG8FmRjoUEGtiR7vvYh). Following is a snapshot from the video. 
+The resulting model is easily transferable to other contexts. See the real-time demo video at [real-time demo link](https://drive.google.com/open?id=1T5AJYp1cF0wLnxG8FmRjoUEGtiR7vvYh). Following is a snapshot from the video. 
 
 <img src="https://github.com/oulutan/ACAM_Demo/blob/master/github_images/lab_actions_snap.png" width="500">
 
