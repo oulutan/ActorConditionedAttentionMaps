@@ -47,3 +47,5 @@ Codebase is structured on multiple directories.
 7. Model will train for 1 epoch and then evaluate the results on the validation set. Periodically check this to see your performance on AVA. This will also generate AVA-style results which could be used for ActivityNet submissions. 
 
 # Training on other Datasets
+
+`model_training/Datasets_JHMDB.py` file is available which was used during JHMDB dataset training. Please create a similar file for your own dataset. 
