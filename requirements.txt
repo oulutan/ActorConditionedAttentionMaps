@@ -53,7 +53,7 @@ pyrepl==0.8.4
 python-dateutil==2.7.3
 pytz==2018.5
 PyWavelets==1.0.1
-PyYAML==5.2
+PyYAML==5.4
 scandir==1.9.0
 scikit-image==0.14.1
 scikit-learn==0.20.0
