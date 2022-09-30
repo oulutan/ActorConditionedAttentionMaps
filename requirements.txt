@@ -23,7 +23,7 @@ html5lib==0.9999999
 imageio==2.4.1
 ipython==5.8.0
 ipython-genutils==0.2.0
-joblib==0.13.0
+joblib==1.2.0
 Keras-Applications==1.0.8
 Keras-Preprocessing==1.1.0
 kiwisolver==1.0.1
